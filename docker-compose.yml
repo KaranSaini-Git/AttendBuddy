@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: attendbuddy-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: attendbuddy
+      POSTGRES_PASSWORD: attendbuddy_dev
+      POSTGRES_DB: attendbuddy
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
