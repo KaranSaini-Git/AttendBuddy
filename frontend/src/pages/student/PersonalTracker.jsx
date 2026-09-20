@@ -172,6 +172,9 @@ export default function PersonalTracker() {
     percentage: 0,
     classes_needed: 0,
     safe_to_miss: 0,
+    planned_total: 0,
+    planned_present: 0,
+    planned_absent: 0,
   };
 
   const groupedTimetable = useMemo(() => {
@@ -478,6 +481,16 @@ export default function PersonalTracker() {
             <p>
               {personalOverall.total} conducted classes have been recorded so
               far.
+              {personalOverall.planned_total > 0 && (
+                <>
+                  {" "}
+                  You also have <strong>
+                    {personalOverall.planned_total}
+                  </strong>{" "}
+                  planned class{personalOverall.planned_total === 1 ? "" : "es"}
+                  .
+                </>
+              )}
             </p>
             <div
               className={`personal-target-message ${personalOverall.percentage < 75 && personalOverall.total ? "warning" : ""}`}
@@ -737,6 +750,11 @@ export default function PersonalTracker() {
                   <span>{subject.present} present</span>
                   <span>{subject.absent} absent</span>
                   <span>{subject.total} conducted</span>
+                  {subject.planned_total > 0 && (
+                    <span className="planned">
+                      {subject.planned_total} planned
+                    </span>
+                  )}
                 </div>
                 <div className="personal-subject-target">
                   {subject.total === 0

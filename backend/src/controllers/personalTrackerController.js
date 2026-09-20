@@ -1,5 +1,24 @@
 import { query, withTransaction } from "../config/db.js";
 
+/*
+ * =========================================================
+ * PERSONAL TRACKER CONTROLLER
+ * =========================================================
+ *
+ * Handles:
+ * - Personal timetable import
+ * - Personal timetable CRUD
+ * - Personal subject CRUD
+ * - Personal attendance CRUD
+ * - Attendance calculations
+ *
+ * Important rule:
+ * Future Present / Absent records are saved and shown as
+ * planned attendance, but they do not count as conducted
+ * classes until the date actually arrives.
+ * =========================================================
+ */
+
 const VALID_DAYS = new Set([
   "Monday",
   "Tuesday",
@@ -18,8 +37,15 @@ const VALID_STATUSES = new Set([
   "Cancelled",
 ]);
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 const normalizeText = (value, maxLength = 255) => {
-  if (value === undefined || value === null) return "";
+  if (value === undefined || value === null) {
+    return "";
+  }
+
   return String(value).trim().slice(0, maxLength);
 };
 
@@ -30,7 +56,10 @@ const normalizeSubjectCode = (value) => {
 
 const normalizeDay = (value) => {
   const raw = normalizeText(value, 20).toLowerCase().replace(/\.$/, "");
-  if (!raw) return null;
+
+  if (!raw) {
+    return null;
+  }
 
   const aliases = {
     mon: "Monday",
@@ -45,46 +74,75 @@ const normalizeDay = (value) => {
     sun: "Sunday",
   };
 
-  return (
-    aliases[raw] ||
-    [...VALID_DAYS].find((day) => day.toLowerCase() === raw) ||
-    null
-  );
+  if (aliases[raw]) {
+    return aliases[raw];
+  }
+
+  return [...VALID_DAYS].find((day) => day.toLowerCase() === raw) || null;
 };
 
 const normalizeTime = (value) => {
   const raw = normalizeText(value, 20).toUpperCase().replace(/\s+/g, " ");
-  if (!raw) return null;
 
+  if (!raw) {
+    return null;
+  }
+
+  // 24-hour format: 09:00
   const twentyFourHour = raw.match(/^(\d{1,2}):(\d{2})$/);
+
   if (twentyFourHour) {
     const hour = Number(twentyFourHour[1]);
     const minute = Number(twentyFourHour[2]);
 
-    if (hour > 23 || minute > 59) return null;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    if (hour > 23 || minute > 59) {
+      return null;
+    }
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0",
+    )}`;
   }
 
+  // 12-hour format: 09:00 AM
   const twelveHour = raw.match(/^(\d{1,2}):(\d{2}) ?(AM|PM)$/);
-  if (!twelveHour) return null;
+
+  if (!twelveHour) {
+    return null;
+  }
 
   let hour = Number(twelveHour[1]);
   const minute = Number(twelveHour[2]);
   const period = twelveHour[3];
 
-  if (hour < 1 || hour > 12 || minute > 59) return null;
-  if (period === "AM" && hour === 12) hour = 0;
-  if (period === "PM" && hour !== 12) hour += 12;
+  if (hour < 1 || hour > 12 || minute > 59) {
+    return null;
+  }
+
+  if (period === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  if (period === "PM" && hour !== 12) {
+    hour += 12;
+  }
 
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 };
 
 const normalizeDate = (value) => {
   const date = normalizeText(value, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return null;
+  }
 
   const parsed = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return null;
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
 
   const matchesInput =
     parsed.getUTCFullYear() === Number(date.slice(0, 4)) &&
@@ -94,31 +152,61 @@ const normalizeDate = (value) => {
   return matchesInput ? date : null;
 };
 
-const getStudentId = async (userId) => {
-  const result = await query(
-    "SELECT id, student_id, name FROM students WHERE user_id = $1 AND active = true LIMIT 1",
-    [userId],
-  );
-  return result.rows[0] || null;
+const getTodayString = () => {
+  const now = new Date();
+
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
 const dayNameFromDate = (dateString) => {
   const date = new Date(`${dateString}T00:00:00Z`);
+
   return new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     timeZone: "UTC",
   }).format(date);
 };
 
+/*
+ * Attendance percentage only uses classes that have
+ * actually happened:
+ *
+ * Present / (Present + Absent) * 100
+ *
+ * Future attendance is intentionally excluded here.
+ */
 const attendanceMath = (present, absent) => {
   const total = present + absent;
+
   const percentage = total ? Number(((present / total) * 100).toFixed(1)) : 0;
+
   const isBelowTarget = total > 0 && present * 4 < total * 3;
 
+  /*
+   * Solve:
+   *
+   * (present + x) / (total + x) >= 0.75
+   *
+   * which becomes:
+   *
+   * 4(present + x) >= 3(total + x)
+   *
+   * x >= 3(total) - 4(present)
+   */
   const classesNeeded = isBelowTarget
     ? Math.max(0, Math.ceil(3 * total - 4 * present))
     : 0;
 
+  /*
+   * Maximum additional absences while staying >= 75%:
+   *
+   * present / (total + x) >= 0.75
+   *
+   * x <= (4 * present - 3 * total) / 3
+   */
   const safeToMiss =
     !isBelowTarget && total > 0
       ? Math.max(0, Math.floor((4 * present - 3 * total) / 3))
@@ -139,18 +227,24 @@ const validateTimetableRow = (row, rowNumber) => {
     row.subject_name ?? row.subject ?? row["Subject Name"],
     120,
   );
+
   const subjectCode = normalizeSubjectCode(
     row.subject_code ?? row.code ?? row["Subject Code"],
   );
+
   const day = normalizeDay(row.day ?? row.day_of_week ?? row["Day of Week"]);
+
   const startTime = normalizeTime(
     row.start_time ?? row.start ?? row["Start Time"],
   );
+
   const endTime = normalizeTime(row.end_time ?? row.end ?? row["End Time"]);
+
   const room = normalizeText(
     row.room ?? row.room_number ?? row["Room Number"],
     50,
   );
+
   const notes = normalizeText(
     row.notes ?? row.details ?? row["Additional Details"],
     255,
@@ -158,16 +252,30 @@ const validateTimetableRow = (row, rowNumber) => {
 
   const errors = [];
 
-  if (!subjectName) errors.push("Subject name is required.");
-  if (!day) errors.push("Day must be Monday through Sunday.");
-  if (!startTime) errors.push("Start time must use HH:MM.");
-  if (!endTime) errors.push("End time must use HH:MM.");
+  if (!subjectName) {
+    errors.push("Subject name is required.");
+  }
+
+  if (!day) {
+    errors.push("Day must be Monday through Sunday.");
+  }
+
+  if (!startTime) {
+    errors.push("Start time must use HH:MM.");
+  }
+
+  if (!endTime) {
+    errors.push("End time must use HH:MM.");
+  }
+
   if (startTime && endTime && startTime >= endTime) {
     errors.push("End time must be later than start time.");
   }
 
   if (errors.length) {
-    return { error: `Row ${rowNumber}: ${errors.join(" ")}` };
+    return {
+      error: `Row ${rowNumber}: ${errors.join(" ")}`,
+    };
   }
 
   return {
@@ -181,213 +289,469 @@ const validateTimetableRow = (row, rowNumber) => {
   };
 };
 
+const getStudentId = async (userId) => {
+  const result = await query(
+    `
+      SELECT
+        id,
+        student_id,
+        name
+      FROM students
+      WHERE user_id = $1
+        AND active = true
+      LIMIT 1
+    `,
+    [userId],
+  );
+
+  return result.rows[0] || null;
+};
+
+/* =========================================================
+   GET PERSONAL TRACKER
+========================================================= */
+
 export const getTracker = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
 
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
+
+    const today = getTodayString();
+
     const selectedDate =
       req.query.date === undefined ? today : normalizeDate(req.query.date);
 
     if (!selectedDate) {
-      return res
-        .status(400)
-        .json({ error: "Date must use YYYY-MM-DD format." });
+      return res.status(400).json({
+        error: "Date must use YYYY-MM-DD format.",
+      });
     }
+
     const selectedDay = dayNameFromDate(selectedDate);
 
+    /*
+     * =====================================================
+     * SUBJECT STATISTICS
+     * =====================================================
+     *
+     * Conducted:
+     *   class_date <= CURRENT_DATE
+     *
+     * Planned:
+     *   class_date > CURRENT_DATE
+     *
+     * This is the important future-attendance fix.
+     */
+
     const subjectsResult = await query(
-      `SELECT
-         ps.id,
-         ps.subject_name,
-         ps.subject_code,
-         ps.active,
-         COUNT(pa.id) FILTER (WHERE pa.status IN ('Present', 'Absent'))::int AS total,
-         COUNT(pa.id) FILTER (WHERE pa.status = 'Present')::int AS present,
-         COUNT(pa.id) FILTER (WHERE pa.status = 'Absent')::int AS absent
-       FROM personal_subjects ps
-       LEFT JOIN personal_timetable pt
-         ON pt.personal_subject_id = ps.id
-        AND pt.student_id = $1
-       LEFT JOIN personal_attendance pa
-         ON pa.timetable_id = pt.id
-        AND pa.student_id = $1
-        AND pa.class_date <= CURRENT_DATE
-       WHERE ps.student_id = $1
-         AND ps.active = true
-       GROUP BY ps.id, ps.subject_name, ps.subject_code, ps.active
-       ORDER BY ps.subject_name ASC`,
+      `
+        SELECT
+          ps.id,
+          ps.subject_name,
+          ps.subject_code,
+          ps.active,
+
+          /* Conducted classes */
+          COUNT(pa.id) FILTER (
+            WHERE pa.status IN ('Present', 'Absent')
+              AND pa.class_date <= CURRENT_DATE
+          )::int AS total,
+
+          COUNT(pa.id) FILTER (
+            WHERE pa.status = 'Present'
+              AND pa.class_date <= CURRENT_DATE
+          )::int AS present,
+
+          COUNT(pa.id) FILTER (
+            WHERE pa.status = 'Absent'
+              AND pa.class_date <= CURRENT_DATE
+          )::int AS absent,
+
+          /* Future planned classes */
+          COUNT(pa.id) FILTER (
+            WHERE pa.status IN ('Present', 'Absent')
+              AND pa.class_date > CURRENT_DATE
+          )::int AS planned_total,
+
+          COUNT(pa.id) FILTER (
+            WHERE pa.status = 'Present'
+              AND pa.class_date > CURRENT_DATE
+          )::int AS planned_present,
+
+          COUNT(pa.id) FILTER (
+            WHERE pa.status = 'Absent'
+              AND pa.class_date > CURRENT_DATE
+          )::int AS planned_absent
+
+        FROM personal_subjects ps
+
+        LEFT JOIN personal_timetable pt
+          ON pt.personal_subject_id = ps.id
+         AND pt.student_id = $1
+         AND pt.active = true
+
+        LEFT JOIN personal_attendance pa
+          ON pa.timetable_id = pt.id
+         AND pa.student_id = $1
+
+        WHERE ps.student_id = $1
+          AND ps.active = true
+
+        GROUP BY
+          ps.id,
+          ps.subject_name,
+          ps.subject_code,
+          ps.active
+
+        ORDER BY ps.subject_name ASC
+      `,
       [student.id],
     );
+
+    /*
+     * =====================================================
+     * FULL WEEKLY TIMETABLE
+     * =====================================================
+     */
 
     const timetableResult = await query(
-      `SELECT
-         pt.id,
-         pt.personal_subject_id AS subject_id,
-         ps.subject_name,
-         ps.subject_code,
-         pt.day_of_week,
-         TO_CHAR(pt.start_time, 'HH24:MI') AS start_time,
-         TO_CHAR(pt.end_time, 'HH24:MI') AS end_time,
-         pt.room,
-         pt.notes
-       FROM personal_timetable pt
-       JOIN personal_subjects ps ON ps.id = pt.personal_subject_id
-       WHERE pt.student_id = $1
-         AND pt.active = true
-         AND ps.active = true
-       ORDER BY
-         CASE pt.day_of_week
-           WHEN 'Monday' THEN 1
-           WHEN 'Tuesday' THEN 2
-           WHEN 'Wednesday' THEN 3
-           WHEN 'Thursday' THEN 4
-           WHEN 'Friday' THEN 5
-           WHEN 'Saturday' THEN 6
-           WHEN 'Sunday' THEN 7
-         END,
-         pt.start_time`,
+      `
+        SELECT
+          pt.id,
+          pt.personal_subject_id AS subject_id,
+          ps.subject_name,
+          ps.subject_code,
+          pt.day_of_week,
+
+          TO_CHAR(
+            pt.start_time,
+            'HH24:MI'
+          ) AS start_time,
+
+          TO_CHAR(
+            pt.end_time,
+            'HH24:MI'
+          ) AS end_time,
+
+          pt.room,
+          pt.notes
+
+        FROM personal_timetable pt
+
+        JOIN personal_subjects ps
+          ON ps.id = pt.personal_subject_id
+
+        WHERE pt.student_id = $1
+          AND pt.active = true
+          AND ps.active = true
+
+        ORDER BY
+          CASE pt.day_of_week
+            WHEN 'Monday' THEN 1
+            WHEN 'Tuesday' THEN 2
+            WHEN 'Wednesday' THEN 3
+            WHEN 'Thursday' THEN 4
+            WHEN 'Friday' THEN 5
+            WHEN 'Saturday' THEN 6
+            WHEN 'Sunday' THEN 7
+          END,
+          pt.start_time
+      `,
       [student.id],
     );
 
+    /*
+     * =====================================================
+     * CLASSES FOR SELECTED DATE
+     * =====================================================
+     */
+
     const dayResult = await query(
-      `SELECT
-         pt.id,
-         pt.personal_subject_id AS subject_id,
-         ps.subject_name,
-         ps.subject_code,
-         pt.day_of_week,
-         TO_CHAR(pt.start_time, 'HH24:MI') AS start_time,
-         TO_CHAR(pt.end_time, 'HH24:MI') AS end_time,
-         pt.room,
-         pt.notes,
-         pa.id AS attendance_id,
-         COALESCE(pa.status, 'Unmarked') AS status
-       FROM personal_timetable pt
-       JOIN personal_subjects ps ON ps.id = pt.personal_subject_id
-       LEFT JOIN personal_attendance pa
-         ON pa.timetable_id = pt.id
-        AND pa.class_date = $2
-       WHERE pt.student_id = $1
-         AND pt.day_of_week = $3
-         AND pt.active = true
-         AND ps.active = true
-       ORDER BY pt.start_time`,
+      `
+        SELECT
+          pt.id,
+          pt.personal_subject_id AS subject_id,
+          ps.subject_name,
+          ps.subject_code,
+          pt.day_of_week,
+
+          TO_CHAR(
+            pt.start_time,
+            'HH24:MI'
+          ) AS start_time,
+
+          TO_CHAR(
+            pt.end_time,
+            'HH24:MI'
+          ) AS end_time,
+
+          pt.room,
+          pt.notes,
+
+          pa.id AS attendance_id,
+
+          COALESCE(
+            pa.status,
+            'Unmarked'
+          ) AS status
+
+        FROM personal_timetable pt
+
+        JOIN personal_subjects ps
+          ON ps.id = pt.personal_subject_id
+
+        LEFT JOIN personal_attendance pa
+          ON pa.timetable_id = pt.id
+         AND pa.student_id = $1
+         AND pa.class_date = $2
+
+        WHERE pt.student_id = $1
+          AND pt.day_of_week = $3
+          AND pt.active = true
+          AND ps.active = true
+
+        ORDER BY pt.start_time
+      `,
       [student.id, selectedDate, selectedDay],
     );
 
+    /*
+     * =====================================================
+     * ATTENDANCE HISTORY
+     * =====================================================
+     *
+     * History contains both past and future records.
+     */
+
     const historyResult = await query(
-      `SELECT
-         pa.id,
-         TO_CHAR(pa.class_date, 'YYYY-MM-DD') AS class_date,
-         pa.status,
-         pt.id AS timetable_id,
-         ps.id AS subject_id,
-         ps.subject_name,
-         ps.subject_code,
-         TO_CHAR(pt.start_time, 'HH24:MI') AS start_time,
-         TO_CHAR(pt.end_time, 'HH24:MI') AS end_time,
-         pt.room
-       FROM personal_attendance pa
-       JOIN personal_timetable pt ON pt.id = pa.timetable_id
-       JOIN personal_subjects ps ON ps.id = pt.personal_subject_id
-       WHERE pa.student_id = $1
-       ORDER BY pa.class_date DESC, pt.start_time DESC
-       LIMIT 200`,
+      `
+        SELECT
+          pa.id,
+
+          TO_CHAR(
+            pa.class_date,
+            'YYYY-MM-DD'
+          ) AS class_date,
+
+          pa.status,
+
+          pt.id AS timetable_id,
+
+          ps.id AS subject_id,
+
+          ps.subject_name,
+          ps.subject_code,
+
+          TO_CHAR(
+            pt.start_time,
+            'HH24:MI'
+          ) AS start_time,
+
+          TO_CHAR(
+            pt.end_time,
+            'HH24:MI'
+          ) AS end_time,
+
+          pt.room
+
+        FROM personal_attendance pa
+
+        JOIN personal_timetable pt
+          ON pt.id = pa.timetable_id
+
+        JOIN personal_subjects ps
+          ON ps.id = pt.personal_subject_id
+
+        WHERE pa.student_id = $1
+
+        ORDER BY
+          pa.class_date DESC,
+          pt.start_time DESC
+
+        LIMIT 200
+      `,
       [student.id],
     );
 
+    /*
+     * =====================================================
+     * FORMAT SUBJECT STATS
+     * =====================================================
+     */
+
     const subjects = subjectsResult.rows.map((row) => {
       const stats = attendanceMath(Number(row.present), Number(row.absent));
+
       return {
         ...row,
+
+        /* Conducted */
         total: stats.total,
         present: stats.present,
         absent: stats.absent,
         percentage: stats.percentage,
+
+        /* 75% calculations */
         classes_needed: stats.classes_needed,
+
         safe_to_miss: stats.safe_to_miss,
+
+        /* Future planned */
+        planned_total: Number(row.planned_total || 0),
+
+        planned_present: Number(row.planned_present || 0),
+
+        planned_absent: Number(row.planned_absent || 0),
       };
     });
+
+    /*
+     * =====================================================
+     * OVERALL STATISTICS
+     * =====================================================
+     */
 
     const overall = subjects.reduce(
       (result, subject) => {
         result.present += subject.present;
         result.absent += subject.absent;
+
+        result.planned_total += subject.planned_total;
+
+        result.planned_present += subject.planned_present;
+
+        result.planned_absent += subject.planned_absent;
+
         return result;
       },
-      { present: 0, absent: 0 },
+      {
+        present: 0,
+        absent: 0,
+        planned_total: 0,
+        planned_present: 0,
+        planned_absent: 0,
+      },
     );
 
-    const overallStats = attendanceMath(overall.present, overall.absent);
+    const calculatedOverall = attendanceMath(overall.present, overall.absent);
 
-    res.json({
+    const overallStats = {
+      ...calculatedOverall,
+
+      planned_total: overall.planned_total,
+
+      planned_present: overall.planned_present,
+
+      planned_absent: overall.planned_absent,
+    };
+
+    return res.json({
       student: {
         id: student.id,
         student_id: student.student_id,
         name: student.name,
       },
+
       selected_date: selectedDate,
       selected_day: selectedDay,
+
       overall: overallStats,
+
       subjects,
+
       timetable: timetableResult.rows,
+
       today: dayResult.rows,
+
       history: historyResult.rows,
     });
   } catch (error) {
     console.error("Personal tracker load error:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to load personal attendance tracker." });
+
+    return res.status(500).json({
+      error: "Failed to load personal attendance tracker.",
+    });
   }
 };
+
+/* =========================================================
+   IMPORT TIMETABLE
+========================================================= */
 
 export const importTimetable = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
 
     const rows = req.body?.rows;
+
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "A non-empty timetable rows array is required." });
+      return res.status(400).json({
+        error: "A non-empty timetable rows array is required.",
+      });
     }
+
     if (rows.length > 300) {
-      return res
-        .status(400)
-        .json({ error: "You can import up to 300 timetable rows at once." });
+      return res.status(400).json({
+        error: "You can import up to 300 timetable rows at once.",
+      });
     }
 
     const validated = rows.map((row, index) =>
       validateTimetableRow(row || {}, index + 1),
     );
+
     const firstError = validated.find((item) => item.error);
-    if (firstError) return res.status(400).json({ error: firstError.error });
+
+    if (firstError) {
+      return res.status(400).json({
+        error: firstError.error,
+      });
+    }
 
     const result = await withTransaction(async (client) => {
       let created = 0;
       let updated = 0;
+
       const imported = [];
 
       for (const row of validated) {
-        // Find the student's existing personal subject first instead of relying on
-        // ON CONFLICT inference against an expression-based unique index. This is
-        // easier to reason about and also lets us reactivate a previously removed
-        // subject cleanly.
+        /*
+         * Find an existing personal subject
+         * belonging to this student.
+         */
         const existingSubject = await client.query(
-          `SELECT id
-           FROM personal_subjects
-           WHERE student_id = $1
-             AND LOWER(subject_name) = LOWER($2)
-             AND COALESCE(LOWER(subject_code), '') = COALESCE(LOWER($3), '')
-           LIMIT 1
-           FOR UPDATE`,
+          `
+                SELECT id
+
+                FROM personal_subjects
+
+                WHERE student_id = $1
+                  AND LOWER(subject_name) =
+                      LOWER($2)
+                  AND COALESCE(
+                        LOWER(subject_code),
+                        ''
+                      ) =
+                      COALESCE(
+                        LOWER($3),
+                        ''
+                      )
+
+                LIMIT 1
+
+                FOR UPDATE
+              `,
           [student.id, row.subjectName, row.subjectCode],
         );
 
@@ -396,59 +760,124 @@ export const importTimetable = async (req, res) => {
         if (existingSubject.rows.length) {
           subjectId = existingSubject.rows[0].id;
 
+          /*
+           * Reactivate it if it had previously
+           * been removed.
+           */
           await client.query(
-            `UPDATE personal_subjects
-             SET active = true,
-                 subject_name = $1,
-                 subject_code = $2,
-                 updated_at = NOW()
-             WHERE id = $3 AND student_id = $4`,
+            `
+                UPDATE personal_subjects
+
+                SET active = true,
+                    subject_name = $1,
+                    subject_code = $2,
+                    updated_at = NOW()
+
+                WHERE id = $3
+                  AND student_id = $4
+              `,
             [row.subjectName, row.subjectCode, subjectId, student.id],
           );
         } else {
           const subjectResult = await client.query(
-            `INSERT INTO personal_subjects
-               (student_id, subject_name, subject_code, active)
-             VALUES ($1, $2, $3, true)
-             RETURNING id`,
+            `
+                  INSERT INTO personal_subjects
+                    (
+                      student_id,
+                      subject_name,
+                      subject_code,
+                      active
+                    )
+
+                  VALUES
+                    ($1, $2, $3, true)
+
+                  RETURNING id
+                `,
             [student.id, row.subjectName, row.subjectCode],
           );
+
           subjectId = subjectResult.rows[0].id;
         }
 
+        /*
+         * Check for an existing class slot.
+         *
+         * A slot is uniquely identified by:
+         * student + subject + day + start + end
+         */
         const existingSlot = await client.query(
-          `SELECT id
-           FROM personal_timetable
-           WHERE student_id = $1
-             AND personal_subject_id = $2
-             AND day_of_week = $3
-             AND start_time = $4
-             AND end_time = $5
-           LIMIT 1`,
+          `
+                SELECT id
+
+                FROM personal_timetable
+
+                WHERE student_id = $1
+                  AND personal_subject_id = $2
+                  AND day_of_week = $3
+                  AND start_time = $4
+                  AND end_time = $5
+
+                LIMIT 1
+              `,
           [student.id, subjectId, row.day, row.startTime, row.endTime],
         );
 
         let saved;
 
         if (existingSlot.rows.length) {
+          /*
+           * Update existing slot instead of
+           * creating a duplicate.
+           */
           const updatedSlot = await client.query(
-            `UPDATE personal_timetable
-             SET room = $1,
-                 notes = $2,
-                 active = true,
-                 updated_at = NOW()
-             WHERE id = $3
-             RETURNING id`,
+            `
+                  UPDATE personal_timetable
+
+                  SET room = $1,
+                      notes = $2,
+                      active = true,
+                      updated_at = NOW()
+
+                  WHERE id = $3
+
+                  RETURNING id
+                `,
             [row.room, row.notes, existingSlot.rows[0].id],
           );
+
           saved = updatedSlot.rows[0];
+
           updated += 1;
         } else {
           const createdSlot = await client.query(
-            `INSERT INTO personal_timetable
-               (student_id, personal_subject_id, day_of_week, start_time, end_time, room, notes, active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-             RETURNING id`,
+            `
+                  INSERT INTO personal_timetable
+                    (
+                      student_id,
+                      personal_subject_id,
+                      day_of_week,
+                      start_time,
+                      end_time,
+                      room,
+                      notes,
+                      active
+                    )
+
+                  VALUES
+                    (
+                      $1,
+                      $2,
+                      $3,
+                      $4,
+                      $5,
+                      $6,
+                      $7,
+                      true
+                    )
+
+                  RETURNING id
+                `,
             [
               student.id,
               subjectId,
@@ -459,7 +888,9 @@ export const importTimetable = async (req, res) => {
               row.notes,
             ],
           );
+
           saved = createdSlot.rows[0];
+
           created += 1;
         }
 
@@ -476,88 +907,151 @@ export const importTimetable = async (req, res) => {
         });
       }
 
-      return { created, updated, imported };
+      return {
+        created,
+        updated,
+        imported,
+      };
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Timetable imported successfully.",
+
       created: result.created,
       updated: result.updated,
+
       imported: result.imported,
     });
   } catch (error) {
     console.error("Timetable import error:", error);
+
     if (error.code === "23505") {
       return res.status(409).json({
         error: "The timetable contains a duplicate subject or class slot.",
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to import timetable.",
-      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
+
+      ...(process.env.NODE_ENV !== "production" && {
+        details: error.message,
+      }),
     });
   }
 };
 
+/* =========================================================
+   UPDATE TIMETABLE ENTRY
+========================================================= */
+
 export const updateTimetableEntry = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id))
-      return res.status(400).json({ error: "Invalid timetable entry." });
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        error: "Invalid timetable entry.",
+      });
+    }
 
     const existingResult = await query(
-      `SELECT * FROM personal_timetable WHERE id = $1 AND student_id = $2 LIMIT 1`,
+      `
+        SELECT *
+        FROM personal_timetable
+        WHERE id = $1
+          AND student_id = $2
+        LIMIT 1
+      `,
       [id, student.id],
     );
-    if (!existingResult.rows.length)
-      return res.status(404).json({ error: "Timetable entry not found." });
+
+    if (!existingResult.rows.length) {
+      return res.status(404).json({
+        error: "Timetable entry not found.",
+      });
+    }
 
     const current = existingResult.rows[0];
+
     const day =
       req.body.day === undefined
         ? current.day_of_week
         : normalizeDay(req.body.day);
+
     const startTime =
       req.body.start_time === undefined
         ? String(current.start_time).slice(0, 5)
         : normalizeTime(req.body.start_time);
+
     const endTime =
       req.body.end_time === undefined
         ? String(current.end_time).slice(0, 5)
         : normalizeTime(req.body.end_time);
+
     const room =
       req.body.room === undefined
         ? current.room
         : normalizeText(req.body.room, 50) || null;
+
     const notes =
       req.body.notes === undefined
         ? current.notes
         : normalizeText(req.body.notes, 255) || null;
+
     const subjectId =
       req.body.subject_id === undefined
         ? current.personal_subject_id
         : Number(req.body.subject_id);
 
     if (!day || !startTime || !endTime || startTime >= endTime) {
-      return res
-        .status(400)
-        .json({ error: "Please provide a valid day and time range." });
+      return res.status(400).json({
+        error: "Please provide a valid day and time range.",
+      });
     }
-    if (!Number.isInteger(subjectId))
-      return res.status(400).json({ error: "Invalid subject." });
+
+    if (!Number.isInteger(subjectId)) {
+      return res.status(400).json({
+        error: "Invalid subject.",
+      });
+    }
 
     const subjectResult = await query(
-      `SELECT id FROM personal_subjects WHERE id = $1 AND student_id = $2 AND active = true LIMIT 1`,
+      `
+          SELECT id
+
+          FROM personal_subjects
+
+          WHERE id = $1
+            AND student_id = $2
+            AND active = true
+
+          LIMIT 1
+        `,
       [subjectId, student.id],
     );
-    if (!subjectResult.rows.length)
-      return res.status(400).json({ error: "Subject not found." });
 
+    if (!subjectResult.rows.length) {
+      return res.status(400).json({
+        error: "Subject not found.",
+      });
+    }
+
+    /*
+     * If attendance already exists,
+     * changing the slot identity would
+     * detach the attendance history.
+     *
+     * Room and notes are still editable.
+     */
     const identityChanged =
       Number(subjectId) !== Number(current.personal_subject_id) ||
       day !== current.day_of_week ||
@@ -566,7 +1060,15 @@ export const updateTimetableEntry = async (req, res) => {
 
     if (identityChanged) {
       const attendanceResult = await query(
-        "SELECT 1 FROM personal_attendance WHERE timetable_id = $1 LIMIT 1",
+        `
+            SELECT 1
+
+            FROM personal_attendance
+
+            WHERE timetable_id = $1
+
+            LIMIT 1
+          `,
         [id],
       );
 
@@ -579,150 +1081,256 @@ export const updateTimetableEntry = async (req, res) => {
     }
 
     const updated = await query(
-      `UPDATE personal_timetable
-       SET personal_subject_id = $1,
-           day_of_week = $2,
-           start_time = $3,
-           end_time = $4,
-           room = $5,
-           notes = $6,
-           updated_at = NOW()
-       WHERE id = $7
-         AND student_id = $8
-       RETURNING *`,
+      `
+          UPDATE personal_timetable
+
+          SET personal_subject_id = $1,
+              day_of_week = $2,
+              start_time = $3,
+              end_time = $4,
+              room = $5,
+              notes = $6,
+              updated_at = NOW()
+
+          WHERE id = $7
+            AND student_id = $8
+
+          RETURNING *
+        `,
       [subjectId, day, startTime, endTime, room, notes, id, student.id],
     );
 
-    res.json(updated.rows[0]);
+    return res.json(updated.rows[0]);
   } catch (error) {
     console.error("Timetable update error:", error);
+
     if (error.code === "23505") {
       return res.status(409).json({
         error: "Another class already uses that same subject, day and time.",
       });
     }
-    res.status(500).json({ error: "Failed to update timetable entry." });
+
+    return res.status(500).json({
+      error: "Failed to update timetable entry.",
+    });
   }
 };
+
+/* =========================================================
+   DELETE TIMETABLE ENTRY
+========================================================= */
 
 export const deleteTimetableEntry = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id))
-      return res.status(400).json({ error: "Invalid timetable entry." });
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        error: "Invalid timetable entry.",
+      });
+    }
 
     const result = await query(
-      `UPDATE personal_timetable
-       SET active = false, updated_at = NOW()
-       WHERE id = $1 AND student_id = $2
-       RETURNING id`,
+      `
+            UPDATE personal_timetable
+
+            SET active = false,
+                updated_at = NOW()
+
+            WHERE id = $1
+              AND student_id = $2
+
+            RETURNING id
+          `,
       [id, student.id],
     );
 
-    if (!result.rows.length)
-      return res.status(404).json({ error: "Timetable entry not found." });
-    res.json({ message: "Timetable entry removed." });
+    if (!result.rows.length) {
+      return res.status(404).json({
+        error: "Timetable entry not found.",
+      });
+    }
+
+    return res.json({
+      message: "Timetable entry removed.",
+    });
   } catch (error) {
     console.error("Timetable delete error:", error);
-    res.status(500).json({ error: "Failed to remove timetable entry." });
+
+    return res.status(500).json({
+      error: "Failed to remove timetable entry.",
+    });
   }
 };
+
+/* =========================================================
+   UPDATE SUBJECT
+========================================================= */
 
 export const updateSubject = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
 
     const id = Number(req.params.id);
+
     const subjectName = normalizeText(req.body.subject_name, 120);
+
     const subjectCode = normalizeSubjectCode(req.body.subject_code);
 
     if (!Number.isInteger(id) || !subjectName) {
-      return res
-        .status(400)
-        .json({ error: "A valid subject ID and name are required." });
+      return res.status(400).json({
+        error: "A valid subject ID and name are required.",
+      });
     }
 
     const result = await query(
-      `UPDATE personal_subjects
-       SET subject_name = $1,
-           subject_code = $2,
-           active = true,
-           updated_at = NOW()
-       WHERE id = $3 AND student_id = $4
-       RETURNING *`,
+      `
+          UPDATE personal_subjects
+
+          SET subject_name = $1,
+              subject_code = $2,
+              active = true,
+              updated_at = NOW()
+
+          WHERE id = $3
+            AND student_id = $4
+
+          RETURNING *
+        `,
       [subjectName, subjectCode, id, student.id],
     );
 
-    if (!result.rows.length)
-      return res.status(404).json({ error: "Subject not found." });
-    res.json(result.rows[0]);
+    if (!result.rows.length) {
+      return res.status(404).json({
+        error: "Subject not found.",
+      });
+    }
+
+    return res.json(result.rows[0]);
   } catch (error) {
     console.error("Personal subject update error:", error);
+
     if (error.code === "23505") {
       return res.status(409).json({
         error: "A subject with the same name and code already exists.",
       });
     }
-    res.status(500).json({ error: "Failed to update subject." });
+
+    return res.status(500).json({
+      error: "Failed to update subject.",
+    });
   }
 };
+
+/* =========================================================
+   DELETE SUBJECT
+========================================================= */
 
 export const deleteSubject = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id))
-      return res.status(400).json({ error: "Invalid subject." });
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        error: "Invalid subject.",
+      });
+    }
 
     await withTransaction(async (client) => {
       const result = await client.query(
-        `UPDATE personal_subjects
-         SET active = false, updated_at = NOW()
-         WHERE id = $1 AND student_id = $2
-         RETURNING id`,
+        `
+              UPDATE personal_subjects
+
+              SET active = false,
+                  updated_at = NOW()
+
+              WHERE id = $1
+                AND student_id = $2
+
+              RETURNING id
+            `,
         [id, student.id],
       );
 
       if (!result.rows.length) {
         const error = new Error("Subject not found.");
+
         error.status = 404;
+
         throw error;
       }
 
+      /*
+       * Removing a subject also hides
+       * its timetable slots, but does not
+       * delete attendance history.
+       */
       await client.query(
-        `UPDATE personal_timetable
-         SET active = false, updated_at = NOW()
-         WHERE personal_subject_id = $1 AND student_id = $2`,
+        `
+            UPDATE personal_timetable
+
+            SET active = false,
+                updated_at = NOW()
+
+            WHERE personal_subject_id = $1
+              AND student_id = $2
+          `,
         [id, student.id],
       );
     });
 
-    res.json({ message: "Subject removed from your timetable." });
+    return res.json({
+      message: "Subject removed from your timetable.",
+    });
   } catch (error) {
     console.error("Personal subject delete error:", error);
-    res
-      .status(error.status || 500)
-      .json({ error: error.message || "Failed to remove subject." });
+
+    return res.status(error.status || 500).json({
+      error: error.message || "Failed to remove subject.",
+    });
   }
 };
+
+/* =========================================================
+   SAVE / UPDATE ATTENDANCE
+========================================================= */
 
 export const saveAttendance = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
 
     const timetableId = Number(req.body.timetable_id);
+
     const date = normalizeDate(req.body.date);
+
     const status = normalizeText(req.body.status, 12);
 
     if (
@@ -736,65 +1344,155 @@ export const saveAttendance = async (req, res) => {
       });
     }
 
+    /*
+     * Make sure the timetable entry
+     * belongs to the logged-in student.
+     */
     const timetableResult = await query(
-      `SELECT id, day_of_week
-       FROM personal_timetable
-       WHERE id = $1 AND student_id = $2 AND active = true
-       LIMIT 1`,
+      `
+            SELECT
+              id,
+              day_of_week
+
+            FROM personal_timetable
+
+            WHERE id = $1
+              AND student_id = $2
+              AND active = true
+
+            LIMIT 1
+          `,
       [timetableId, student.id],
     );
 
     if (!timetableResult.rows.length) {
-      return res.status(404).json({ error: "Timetable entry not found." });
+      return res.status(404).json({
+        error: "Timetable entry not found.",
+      });
     }
 
+    /*
+     * Prevent marking a class on the
+     * wrong weekday.
+     *
+     * Example:
+     * Monday class cannot be marked
+     * on Tuesday.
+     */
     if (timetableResult.rows[0].day_of_week !== dayNameFromDate(date)) {
-      return res
-        .status(400)
-        .json({ error: "That class is not scheduled for this date." });
+      return res.status(400).json({
+        error: "That class is not scheduled for this date.",
+      });
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * We intentionally do NOT reject future
+     * dates here.
+     *
+     * Future attendance is stored as planned
+     * attendance and later becomes part of the
+     * actual attendance calculation when the
+     * date arrives.
+     */
     const result = await query(
-      `INSERT INTO personal_attendance
-         (student_id, timetable_id, class_date, status)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (student_id, timetable_id, class_date)
-       DO UPDATE SET
-         status = EXCLUDED.status,
-         updated_at = NOW()
-       RETURNING *`,
+      `
+            INSERT INTO personal_attendance
+              (
+                student_id,
+                timetable_id,
+                class_date,
+                status
+              )
+
+            VALUES
+              ($1, $2, $3, $4)
+
+            ON CONFLICT
+              (
+                student_id,
+                timetable_id,
+                class_date
+              )
+
+            DO UPDATE SET
+              status = EXCLUDED.status,
+              updated_at = NOW()
+
+            RETURNING
+              id,
+              student_id,
+              timetable_id,
+              class_date,
+              status,
+              updated_at
+          `,
       [student.id, timetableId, date, status],
     );
 
-    res.json({ message: "Attendance updated.", attendance: result.rows[0] });
+    return res.json({
+      message: "Attendance updated.",
+
+      attendance: result.rows[0],
+    });
   } catch (error) {
     console.error("Personal attendance save error:", error);
-    res.status(500).json({ error: "Failed to save personal attendance." });
+
+    return res.status(500).json({
+      error: "Failed to save personal attendance.",
+    });
   }
 };
+
+/* =========================================================
+   DELETE ATTENDANCE
+========================================================= */
 
 export const deleteAttendance = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student)
-      return res.status(404).json({ error: "Student profile not found." });
+
+    if (!student) {
+      return res.status(404).json({
+        error: "Student profile not found.",
+      });
+    }
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id))
-      return res.status(400).json({ error: "Invalid attendance record." });
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        error: "Invalid attendance record.",
+      });
+    }
 
     const result = await query(
-      `DELETE FROM personal_attendance
-       WHERE id = $1 AND student_id = $2
-       RETURNING id`,
+      `
+            DELETE FROM personal_attendance
+
+            WHERE id = $1
+              AND student_id = $2
+
+            RETURNING id
+          `,
       [id, student.id],
     );
 
-    if (!result.rows.length)
-      return res.status(404).json({ error: "Attendance record not found." });
-    res.json({ message: "Attendance entry cleared." });
+    if (!result.rows.length) {
+      return res.status(404).json({
+        error: "Attendance record not found.",
+      });
+    }
+
+    return res.json({
+      message: "Attendance entry cleared.",
+    });
   } catch (error) {
     console.error("Personal attendance delete error:", error);
-    res.status(500).json({ error: "Failed to clear attendance entry." });
+
+    return res.status(500).json({
+      error: "Failed to clear attendance entry.",
+    });
   }
 };
