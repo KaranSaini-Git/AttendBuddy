@@ -1,23 +1,8 @@
 import { query, withTransaction } from "../config/db.js";
 
-/*
- * =========================================================
- * PERSONAL TRACKER CONTROLLER
- * =========================================================
- *
- * Handles:
- * - Personal timetable import
- * - Personal timetable CRUD
- * - Personal subject CRUD
- * - Personal attendance CRUD
- * - Attendance calculations
- *
- * Important rule:
- * Future Present / Absent records are saved and shown as
- * planned attendance, but they do not count as conducted
- * classes until the date actually arrives.
- * =========================================================
- */
+/* =========================================================
+   CONSTANTS
+========================================================= */
 
 const VALID_DAYS = new Set([
   "Monday",
@@ -38,7 +23,7 @@ const VALID_STATUSES = new Set([
 ]);
 
 /* =========================================================
-   HELPERS
+   BASIC HELPERS
 ========================================================= */
 
 const normalizeText = (value, maxLength = 255) => {
@@ -51,6 +36,7 @@ const normalizeText = (value, maxLength = 255) => {
 
 const normalizeSubjectCode = (value) => {
   const code = normalizeText(value, 30);
+
   return code || null;
 };
 
@@ -88,11 +74,12 @@ const normalizeTime = (value) => {
     return null;
   }
 
-  // 24-hour format: 09:00
+  /* 24-hour format */
   const twentyFourHour = raw.match(/^(\d{1,2}):(\d{2})$/);
 
   if (twentyFourHour) {
     const hour = Number(twentyFourHour[1]);
+
     const minute = Number(twentyFourHour[2]);
 
     if (hour > 23 || minute > 59) {
@@ -105,7 +92,7 @@ const normalizeTime = (value) => {
     )}`;
   }
 
-  // 12-hour format: 09:00 AM
+  /* 12-hour format */
   const twelveHour = raw.match(/^(\d{1,2}):(\d{2}) ?(AM|PM)$/);
 
   if (!twelveHour) {
@@ -113,7 +100,9 @@ const normalizeTime = (value) => {
   }
 
   let hour = Number(twelveHour[1]);
+
   const minute = Number(twelveHour[2]);
+
   const period = twelveHour[3];
 
   if (hour < 1 || hour > 12 || minute > 59) {
@@ -144,12 +133,12 @@ const normalizeDate = (value) => {
     return null;
   }
 
-  const matchesInput =
+  const validDate =
     parsed.getUTCFullYear() === Number(date.slice(0, 4)) &&
     parsed.getUTCMonth() + 1 === Number(date.slice(5, 7)) &&
     parsed.getUTCDate() === Number(date.slice(8, 10));
 
-  return matchesInput ? date : null;
+  return validDate ? date : null;
 };
 
 const getTodayString = () => {
@@ -170,14 +159,10 @@ const dayNameFromDate = (dateString) => {
   }).format(date);
 };
 
-/*
- * Attendance percentage only uses classes that have
- * actually happened:
- *
- * Present / (Present + Absent) * 100
- *
- * Future attendance is intentionally excluded here.
- */
+/* =========================================================
+   ATTENDANCE MATH
+========================================================= */
+
 const attendanceMath = (present, absent) => {
   const total = present + absent;
 
@@ -188,25 +173,26 @@ const attendanceMath = (present, absent) => {
   /*
    * Solve:
    *
-   * (present + x) / (total + x) >= 0.75
-   *
-   * which becomes:
-   *
-   * 4(present + x) >= 3(total + x)
+   * (present + x) /
+   * (total + x) >= .75
    *
    * x >= 3(total) - 4(present)
    */
+
   const classesNeeded = isBelowTarget
     ? Math.max(0, Math.ceil(3 * total - 4 * present))
     : 0;
 
   /*
-   * Maximum additional absences while staying >= 75%:
+   * Solve:
    *
-   * present / (total + x) >= 0.75
+   * present /
+   * (total + x) >= .75
    *
-   * x <= (4 * present - 3 * total) / 3
+   * x <=
+   * (4present - 3total) / 3
    */
+
   const safeToMiss =
     !isBelowTarget && total > 0
       ? Math.max(0, Math.floor((4 * present - 3 * total) / 3))
@@ -221,6 +207,32 @@ const attendanceMath = (present, absent) => {
     safe_to_miss: safeToMiss,
   };
 };
+
+/* =========================================================
+   STUDENT
+========================================================= */
+
+const getStudentId = async (userId) => {
+  const result = await query(
+    `
+        SELECT
+          id,
+          student_id,
+          name
+        FROM students
+        WHERE user_id = $1
+          AND active = true
+        LIMIT 1
+      `,
+    [userId],
+  );
+
+  return result.rows[0] || null;
+};
+
+/* =========================================================
+   CSV VALIDATION
+========================================================= */
 
 const validateTimetableRow = (row, rowNumber) => {
   const subjectName = normalizeText(
@@ -289,26 +301,8 @@ const validateTimetableRow = (row, rowNumber) => {
   };
 };
 
-const getStudentId = async (userId) => {
-  const result = await query(
-    `
-      SELECT
-        id,
-        student_id,
-        name
-      FROM students
-      WHERE user_id = $1
-        AND active = true
-      LIMIT 1
-    `,
-    [userId],
-  );
-
-  return result.rows[0] || null;
-};
-
 /* =========================================================
-   GET PERSONAL TRACKER
+   GET TRACKER
 ========================================================= */
 
 export const getTracker = async (req, res) => {
@@ -334,294 +328,345 @@ export const getTracker = async (req, res) => {
 
     const selectedDay = dayNameFromDate(selectedDate);
 
-    /*
-     * =====================================================
-     * SUBJECT STATISTICS
-     * =====================================================
-     *
-     * Conducted:
-     *   class_date <= CURRENT_DATE
-     *
-     * Planned:
-     *   class_date > CURRENT_DATE
-     *
-     * This is the important future-attendance fix.
-     */
+    /* =====================================================
+         SUBJECT STATISTICS
+      ===================================================== */
 
     const subjectsResult = await query(
       `
-        SELECT
-          ps.id,
-          ps.subject_name,
-          ps.subject_code,
-          ps.active,
+            SELECT
+              ps.id,
+              ps.subject_name,
+              ps.subject_code,
+              ps.active,
 
-          /* Conducted classes */
-          COUNT(pa.id) FILTER (
-            WHERE pa.status IN ('Present', 'Absent')
-              AND pa.class_date <= CURRENT_DATE
-          )::int AS total,
+              /* Actual attendance */
+              COUNT(pa.id) FILTER (
+                WHERE
+                  pa.status IN (
+                    'Present',
+                    'Absent'
+                  )
+                  AND pa.class_date
+                    <= CURRENT_DATE
+              )::int AS total,
 
-          COUNT(pa.id) FILTER (
-            WHERE pa.status = 'Present'
-              AND pa.class_date <= CURRENT_DATE
-          )::int AS present,
+              COUNT(pa.id) FILTER (
+                WHERE
+                  pa.status = 'Present'
+                  AND pa.class_date
+                    <= CURRENT_DATE
+              )::int AS present,
 
-          COUNT(pa.id) FILTER (
-            WHERE pa.status = 'Absent'
-              AND pa.class_date <= CURRENT_DATE
-          )::int AS absent,
+              COUNT(pa.id) FILTER (
+                WHERE
+                  pa.status = 'Absent'
+                  AND pa.class_date
+                    <= CURRENT_DATE
+              )::int AS absent,
 
-          /* Future planned classes */
-          COUNT(pa.id) FILTER (
-            WHERE pa.status IN ('Present', 'Absent')
-              AND pa.class_date > CURRENT_DATE
-          )::int AS planned_total,
+              /* Future planned marks */
+              COUNT(pa.id) FILTER (
+                WHERE
+                  pa.status IN (
+                    'Present',
+                    'Absent'
+                  )
+                  AND pa.class_date
+                    > CURRENT_DATE
+              )::int AS planned_total,
 
-          COUNT(pa.id) FILTER (
-            WHERE pa.status = 'Present'
-              AND pa.class_date > CURRENT_DATE
-          )::int AS planned_present,
+              COUNT(pa.id) FILTER (
+                WHERE
+                  pa.status = 'Present'
+                  AND pa.class_date
+                    > CURRENT_DATE
+              )::int AS planned_present,
 
-          COUNT(pa.id) FILTER (
-            WHERE pa.status = 'Absent'
-              AND pa.class_date > CURRENT_DATE
-          )::int AS planned_absent
+              COUNT(pa.id) FILTER (
+                WHERE
+                  pa.status = 'Absent'
+                  AND pa.class_date
+                    > CURRENT_DATE
+              )::int AS planned_absent
 
-        FROM personal_subjects ps
+            FROM personal_subjects ps
 
-        LEFT JOIN personal_timetable pt
-          ON pt.personal_subject_id = ps.id
-         AND pt.student_id = $1
-         AND pt.active = true
+            LEFT JOIN personal_timetable pt
+              ON pt.personal_subject_id =
+                ps.id
+             AND pt.student_id = $1
+             AND pt.active = true
 
-        LEFT JOIN personal_attendance pa
-          ON pa.timetable_id = pt.id
-         AND pa.student_id = $1
+            LEFT JOIN personal_attendance pa
+              ON pa.timetable_id =
+                pt.id
+             AND pa.student_id = $1
 
-        WHERE ps.student_id = $1
-          AND ps.active = true
+            WHERE
+              ps.student_id = $1
+              AND ps.active = true
 
-        GROUP BY
-          ps.id,
-          ps.subject_name,
-          ps.subject_code,
-          ps.active
+            GROUP BY
+              ps.id,
+              ps.subject_name,
+              ps.subject_code,
+              ps.active
 
-        ORDER BY ps.subject_name ASC
-      `,
+            ORDER BY
+              ps.subject_name ASC
+          `,
       [student.id],
     );
 
-    /*
-     * =====================================================
-     * FULL WEEKLY TIMETABLE
-     * =====================================================
-     */
+    /* =====================================================
+         WEEKLY TIMETABLE
+      ===================================================== */
 
     const timetableResult = await query(
       `
-        SELECT
-          pt.id,
-          pt.personal_subject_id AS subject_id,
-          ps.subject_name,
-          ps.subject_code,
-          pt.day_of_week,
+            SELECT
+              pt.id,
+              pt.personal_subject_id
+                AS subject_id,
+              ps.subject_name,
+              ps.subject_code,
+              pt.day_of_week,
 
-          TO_CHAR(
-            pt.start_time,
-            'HH24:MI'
-          ) AS start_time,
+              TO_CHAR(
+                pt.start_time,
+                'HH24:MI'
+              ) AS start_time,
 
-          TO_CHAR(
-            pt.end_time,
-            'HH24:MI'
-          ) AS end_time,
+              TO_CHAR(
+                pt.end_time,
+                'HH24:MI'
+              ) AS end_time,
 
-          pt.room,
-          pt.notes
+              pt.room,
+              pt.notes
 
-        FROM personal_timetable pt
+            FROM personal_timetable pt
 
-        JOIN personal_subjects ps
-          ON ps.id = pt.personal_subject_id
+            JOIN personal_subjects ps
+              ON ps.id =
+                pt.personal_subject_id
 
-        WHERE pt.student_id = $1
-          AND pt.active = true
-          AND ps.active = true
+            WHERE
+              pt.student_id = $1
+              AND pt.active = true
+              AND ps.active = true
 
-        ORDER BY
-          CASE pt.day_of_week
-            WHEN 'Monday' THEN 1
-            WHEN 'Tuesday' THEN 2
-            WHEN 'Wednesday' THEN 3
-            WHEN 'Thursday' THEN 4
-            WHEN 'Friday' THEN 5
-            WHEN 'Saturday' THEN 6
-            WHEN 'Sunday' THEN 7
-          END,
-          pt.start_time
-      `,
+            ORDER BY
+              CASE
+                pt.day_of_week
+                WHEN 'Monday'
+                  THEN 1
+                WHEN 'Tuesday'
+                  THEN 2
+                WHEN 'Wednesday'
+                  THEN 3
+                WHEN 'Thursday'
+                  THEN 4
+                WHEN 'Friday'
+                  THEN 5
+                WHEN 'Saturday'
+                  THEN 6
+                WHEN 'Sunday'
+                  THEN 7
+              END,
+              pt.start_time
+          `,
       [student.id],
     );
 
-    /*
-     * =====================================================
-     * CLASSES FOR SELECTED DATE
-     * =====================================================
-     */
+    /* =====================================================
+         SELECTED DAY CLASSES
+      ===================================================== */
 
     const dayResult = await query(
       `
-        SELECT
-          pt.id,
-          pt.personal_subject_id AS subject_id,
-          ps.subject_name,
-          ps.subject_code,
-          pt.day_of_week,
+            SELECT
+              pt.id,
+              pt.personal_subject_id
+                AS subject_id,
+              ps.subject_name,
+              ps.subject_code,
+              pt.day_of_week,
 
-          TO_CHAR(
-            pt.start_time,
-            'HH24:MI'
-          ) AS start_time,
+              TO_CHAR(
+                pt.start_time,
+                'HH24:MI'
+              ) AS start_time,
 
-          TO_CHAR(
-            pt.end_time,
-            'HH24:MI'
-          ) AS end_time,
+              TO_CHAR(
+                pt.end_time,
+                'HH24:MI'
+              ) AS end_time,
 
-          pt.room,
-          pt.notes,
+              pt.room,
+              pt.notes,
 
-          pa.id AS attendance_id,
+              pa.id
+                AS attendance_id,
 
-          COALESCE(
-            pa.status,
-            'Unmarked'
-          ) AS status
+              COALESCE(
+                pa.status,
+                'Unmarked'
+              ) AS status
 
-        FROM personal_timetable pt
+            FROM personal_timetable pt
 
-        JOIN personal_subjects ps
-          ON ps.id = pt.personal_subject_id
+            JOIN personal_subjects ps
+              ON ps.id =
+                pt.personal_subject_id
 
-        LEFT JOIN personal_attendance pa
-          ON pa.timetable_id = pt.id
-         AND pa.student_id = $1
-         AND pa.class_date = $2
+            LEFT JOIN personal_attendance pa
+              ON pa.timetable_id =
+                pt.id
+             AND pa.student_id = $1
+             AND pa.class_date = $2
 
-        WHERE pt.student_id = $1
-          AND pt.day_of_week = $3
-          AND pt.active = true
-          AND ps.active = true
+            WHERE
+              pt.student_id = $1
+              AND pt.day_of_week = $3
+              AND pt.active = true
+              AND ps.active = true
 
-        ORDER BY pt.start_time
-      `,
+            ORDER BY
+              pt.start_time
+          `,
       [student.id, selectedDate, selectedDay],
     );
 
-    /*
-     * =====================================================
-     * ATTENDANCE HISTORY
-     * =====================================================
-     *
-     * History contains both past and future records.
-     */
+    /* =====================================================
+         HISTORY
+      ===================================================== */
 
     const historyResult = await query(
       `
-        SELECT
-          pa.id,
+            SELECT
+              pa.id,
 
-          TO_CHAR(
-            pa.class_date,
-            'YYYY-MM-DD'
-          ) AS class_date,
+              TO_CHAR(
+                pa.class_date,
+                'YYYY-MM-DD'
+              ) AS class_date,
 
-          pa.status,
+              pa.status,
 
-          pt.id AS timetable_id,
+              pt.id
+                AS timetable_id,
 
-          ps.id AS subject_id,
+              ps.id
+                AS subject_id,
 
-          ps.subject_name,
-          ps.subject_code,
+              ps.subject_name,
+              ps.subject_code,
 
-          TO_CHAR(
-            pt.start_time,
-            'HH24:MI'
-          ) AS start_time,
+              TO_CHAR(
+                pt.start_time,
+                'HH24:MI'
+              ) AS start_time,
 
-          TO_CHAR(
-            pt.end_time,
-            'HH24:MI'
-          ) AS end_time,
+              TO_CHAR(
+                pt.end_time,
+                'HH24:MI'
+              ) AS end_time,
 
-          pt.room
+              pt.room
 
-        FROM personal_attendance pa
+            FROM personal_attendance pa
 
-        JOIN personal_timetable pt
-          ON pt.id = pa.timetable_id
+            JOIN personal_timetable pt
+              ON pt.id =
+                pa.timetable_id
 
-        JOIN personal_subjects ps
-          ON ps.id = pt.personal_subject_id
+            JOIN personal_subjects ps
+              ON ps.id =
+                pt.personal_subject_id
 
-        WHERE pa.student_id = $1
+            WHERE
+              pa.student_id = $1
 
-        ORDER BY
-          pa.class_date DESC,
-          pt.start_time DESC
+            ORDER BY
+              pa.class_date DESC,
+              pt.start_time DESC
 
-        LIMIT 200
-      `,
+            LIMIT 200
+          `,
       [student.id],
     );
 
-    /*
-     * =====================================================
-     * FORMAT SUBJECT STATS
-     * =====================================================
-     */
+    /* =====================================================
+         SUBJECT CALCULATIONS
+      ===================================================== */
 
     const subjects = subjectsResult.rows.map((row) => {
-      const stats = attendanceMath(Number(row.present), Number(row.absent));
+      const present = Number(row.present || 0);
+
+      const absent = Number(row.absent || 0);
+
+      const plannedPresent = Number(row.planned_present || 0);
+
+      const plannedAbsent = Number(row.planned_absent || 0);
+
+      /* Current */
+      const current = attendanceMath(present, absent);
+
+      /* Future projection */
+      const projected = attendanceMath(
+        present + plannedPresent,
+        absent + plannedAbsent,
+      );
 
       return {
         ...row,
 
-        /* Conducted */
-        total: stats.total,
-        present: stats.present,
-        absent: stats.absent,
-        percentage: stats.percentage,
+        /* Current */
+        total: current.total,
 
-        /* 75% calculations */
-        classes_needed: stats.classes_needed,
+        present: current.present,
 
-        safe_to_miss: stats.safe_to_miss,
+        absent: current.absent,
 
-        /* Future planned */
+        percentage: current.percentage,
+
+        classes_needed: current.classes_needed,
+
+        safe_to_miss: current.safe_to_miss,
+
+        /* Future */
         planned_total: Number(row.planned_total || 0),
 
-        planned_present: Number(row.planned_present || 0),
+        planned_present: plannedPresent,
 
-        planned_absent: Number(row.planned_absent || 0),
+        planned_absent: plannedAbsent,
+
+        /* Projection */
+        projected_total: projected.total,
+
+        projected_present: projected.present,
+
+        projected_absent: projected.absent,
+
+        projected_percentage: projected.percentage,
+
+        projected_classes_needed: projected.classes_needed,
+
+        projected_safe_to_miss: projected.safe_to_miss,
       };
     });
 
-    /*
-     * =====================================================
-     * OVERALL STATISTICS
-     * =====================================================
-     */
+    /* =====================================================
+         OVERALL CALCULATIONS
+      ===================================================== */
 
     const overall = subjects.reduce(
       (result, subject) => {
         result.present += subject.present;
-        result.absent += subject.absent;
 
-        result.planned_total += subject.planned_total;
+        result.absent += subject.absent;
 
         result.planned_present += subject.planned_present;
 
@@ -632,22 +677,43 @@ export const getTracker = async (req, res) => {
       {
         present: 0,
         absent: 0,
-        planned_total: 0,
         planned_present: 0,
         planned_absent: 0,
       },
     );
 
-    const calculatedOverall = attendanceMath(overall.present, overall.absent);
+    /* Current */
+    const currentOverall = attendanceMath(overall.present, overall.absent);
+
+    /* Projected */
+    const projectedOverall = attendanceMath(
+      overall.present + overall.planned_present,
+
+      overall.absent + overall.planned_absent,
+    );
 
     const overallStats = {
-      ...calculatedOverall,
+      ...currentOverall,
 
-      planned_total: overall.planned_total,
+      /* Future */
+      planned_total: overall.planned_present + overall.planned_absent,
 
       planned_present: overall.planned_present,
 
       planned_absent: overall.planned_absent,
+
+      /* Projection */
+      projected_total: projectedOverall.total,
+
+      projected_present: projectedOverall.present,
+
+      projected_absent: projectedOverall.absent,
+
+      projected_percentage: projectedOverall.percentage,
+
+      projected_classes_needed: projectedOverall.classes_needed,
+
+      projected_safe_to_miss: projectedOverall.safe_to_miss,
     };
 
     return res.json({
@@ -658,6 +724,7 @@ export const getTracker = async (req, res) => {
       },
 
       selected_date: selectedDate,
+
       selected_day: selectedDay,
 
       overall: overallStats,
@@ -726,32 +793,37 @@ export const importTimetable = async (req, res) => {
       const imported = [];
 
       for (const row of validated) {
-        /*
-         * Find an existing personal subject
-         * belonging to this student.
-         */
+        /* ---------------------------------------------
+                 FIND SUBJECT
+              --------------------------------------------- */
+
         const existingSubject = await client.query(
           `
-                SELECT id
+                    SELECT id
+                    FROM personal_subjects
 
-                FROM personal_subjects
+                    WHERE
+                      student_id = $1
+                      AND LOWER(
+                        subject_name
+                      ) =
+                        LOWER($2)
 
-                WHERE student_id = $1
-                  AND LOWER(subject_name) =
-                      LOWER($2)
-                  AND COALESCE(
-                        LOWER(subject_code),
+                      AND COALESCE(
+                        LOWER(
+                          subject_code
+                        ),
                         ''
                       ) =
-                      COALESCE(
-                        LOWER($3),
-                        ''
-                      )
+                        COALESCE(
+                          LOWER($3),
+                          ''
+                        )
 
-                LIMIT 1
+                    LIMIT 1
 
-                FOR UPDATE
-              `,
+                    FOR UPDATE
+                  `,
           [student.id, row.subjectName, row.subjectCode],
         );
 
@@ -760,89 +832,94 @@ export const importTimetable = async (req, res) => {
         if (existingSubject.rows.length) {
           subjectId = existingSubject.rows[0].id;
 
-          /*
-           * Reactivate it if it had previously
-           * been removed.
-           */
           await client.query(
             `
-                UPDATE personal_subjects
+                    UPDATE
+                      personal_subjects
 
-                SET active = true,
-                    subject_name = $1,
-                    subject_code = $2,
-                    updated_at = NOW()
+                    SET
+                      active = true,
+                      subject_name = $1,
+                      subject_code = $2,
+                      updated_at =
+                        NOW()
 
-                WHERE id = $3
-                  AND student_id = $4
-              `,
+                    WHERE
+                      id = $3
+                      AND student_id = $4
+                  `,
             [row.subjectName, row.subjectCode, subjectId, student.id],
           );
         } else {
           const subjectResult = await client.query(
             `
-                  INSERT INTO personal_subjects
-                    (
-                      student_id,
-                      subject_name,
-                      subject_code,
-                      active
-                    )
+                      INSERT INTO
+                        personal_subjects
+                        (
+                          student_id,
+                          subject_name,
+                          subject_code,
+                          active
+                        )
 
-                  VALUES
-                    ($1, $2, $3, true)
+                      VALUES
+                        (
+                          $1,
+                          $2,
+                          $3,
+                          true
+                        )
 
-                  RETURNING id
-                `,
+                      RETURNING id
+                    `,
             [student.id, row.subjectName, row.subjectCode],
           );
 
           subjectId = subjectResult.rows[0].id;
         }
 
-        /*
-         * Check for an existing class slot.
-         *
-         * A slot is uniquely identified by:
-         * student + subject + day + start + end
-         */
+        /* ---------------------------------------------
+                 FIND CLASS SLOT
+              --------------------------------------------- */
+
         const existingSlot = await client.query(
           `
-                SELECT id
+                    SELECT id
 
-                FROM personal_timetable
+                    FROM personal_timetable
 
-                WHERE student_id = $1
-                  AND personal_subject_id = $2
-                  AND day_of_week = $3
-                  AND start_time = $4
-                  AND end_time = $5
+                    WHERE
+                      student_id = $1
+                      AND personal_subject_id = $2
+                      AND day_of_week = $3
+                      AND start_time = $4
+                      AND end_time = $5
 
-                LIMIT 1
-              `,
+                    LIMIT 1
+                  `,
           [student.id, subjectId, row.day, row.startTime, row.endTime],
         );
 
         let saved;
 
         if (existingSlot.rows.length) {
-          /*
-           * Update existing slot instead of
-           * creating a duplicate.
-           */
           const updatedSlot = await client.query(
             `
-                  UPDATE personal_timetable
+                      UPDATE
+                        personal_timetable
 
-                  SET room = $1,
-                      notes = $2,
-                      active = true,
-                      updated_at = NOW()
+                      SET
+                        room = $1,
+                        notes = $2,
+                        active = true,
+                        updated_at =
+                          NOW()
 
-                  WHERE id = $3
+                      WHERE
+                        id = $3
 
-                  RETURNING id
-                `,
+                      RETURNING id
+                    `,
             [row.room, row.notes, existingSlot.rows[0].id],
           );
 
@@ -852,32 +929,33 @@ export const importTimetable = async (req, res) => {
         } else {
           const createdSlot = await client.query(
             `
-                  INSERT INTO personal_timetable
-                    (
-                      student_id,
-                      personal_subject_id,
-                      day_of_week,
-                      start_time,
-                      end_time,
-                      room,
-                      notes,
-                      active
-                    )
+                      INSERT INTO
+                        personal_timetable
+                        (
+                          student_id,
+                          personal_subject_id,
+                          day_of_week,
+                          start_time,
+                          end_time,
+                          room,
+                          notes,
+                          active
+                        )
 
-                  VALUES
-                    (
-                      $1,
-                      $2,
-                      $3,
-                      $4,
-                      $5,
-                      $6,
-                      $7,
-                      true
-                    )
+                      VALUES
+                        (
+                          $1,
+                          $2,
+                          $3,
+                          $4,
+                          $5,
+                          $6,
+                          $7,
+                          true
+                        )
 
-                  RETURNING id
-                `,
+                      RETURNING id
+                    `,
             [
               student.id,
               subjectId,
@@ -918,6 +996,7 @@ export const importTimetable = async (req, res) => {
       message: "Timetable imported successfully.",
 
       created: result.created,
+
       updated: result.updated,
 
       imported: result.imported,
@@ -965,12 +1044,16 @@ export const updateTimetableEntry = async (req, res) => {
 
     const existingResult = await query(
       `
-        SELECT *
-        FROM personal_timetable
-        WHERE id = $1
-          AND student_id = $2
-        LIMIT 1
-      `,
+            SELECT *
+
+            FROM personal_timetable
+
+            WHERE
+              id = $1
+              AND student_id = $2
+
+            LIMIT 1
+          `,
       [id, student.id],
     );
 
@@ -1026,16 +1109,17 @@ export const updateTimetableEntry = async (req, res) => {
 
     const subjectResult = await query(
       `
-          SELECT id
+            SELECT id
 
-          FROM personal_subjects
+            FROM personal_subjects
 
-          WHERE id = $1
-            AND student_id = $2
-            AND active = true
+            WHERE
+              id = $1
+              AND student_id = $2
+              AND active = true
 
-          LIMIT 1
-        `,
+            LIMIT 1
+          `,
       [subjectId, student.id],
     );
 
@@ -1045,13 +1129,6 @@ export const updateTimetableEntry = async (req, res) => {
       });
     }
 
-    /*
-     * If attendance already exists,
-     * changing the slot identity would
-     * detach the attendance history.
-     *
-     * Room and notes are still editable.
-     */
     const identityChanged =
       Number(subjectId) !== Number(current.personal_subject_id) ||
       day !== current.day_of_week ||
@@ -1061,14 +1138,15 @@ export const updateTimetableEntry = async (req, res) => {
     if (identityChanged) {
       const attendanceResult = await query(
         `
-            SELECT 1
+              SELECT 1
 
-            FROM personal_attendance
+              FROM personal_attendance
 
-            WHERE timetable_id = $1
+              WHERE
+                timetable_id = $1
 
-            LIMIT 1
-          `,
+              LIMIT 1
+            `,
         [id],
       );
 
@@ -1082,9 +1160,11 @@ export const updateTimetableEntry = async (req, res) => {
 
     const updated = await query(
       `
-          UPDATE personal_timetable
+            UPDATE
+              personal_timetable
 
-          SET personal_subject_id = $1,
+            SET
+              personal_subject_id = $1,
               day_of_week = $2,
               start_time = $3,
               end_time = $4,
@@ -1092,11 +1172,12 @@ export const updateTimetableEntry = async (req, res) => {
               notes = $6,
               updated_at = NOW()
 
-          WHERE id = $7
-            AND student_id = $8
+            WHERE
+              id = $7
+              AND student_id = $8
 
-          RETURNING *
-        `,
+            RETURNING *
+          `,
       [subjectId, day, startTime, endTime, room, notes, id, student.id],
     );
 
@@ -1140,12 +1221,15 @@ export const deleteTimetableEntry = async (req, res) => {
 
     const result = await query(
       `
-            UPDATE personal_timetable
+            UPDATE
+              personal_timetable
 
-            SET active = false,
-                updated_at = NOW()
+            SET
+              active = false,
+              updated_at = NOW()
 
-            WHERE id = $1
+            WHERE
+              id = $1
               AND student_id = $2
 
             RETURNING id
@@ -1199,18 +1283,21 @@ export const updateSubject = async (req, res) => {
 
     const result = await query(
       `
-          UPDATE personal_subjects
+            UPDATE
+              personal_subjects
 
-          SET subject_name = $1,
+            SET
+              subject_name = $1,
               subject_code = $2,
               active = true,
               updated_at = NOW()
 
-          WHERE id = $3
-            AND student_id = $4
+            WHERE
+              id = $3
+              AND student_id = $4
 
-          RETURNING *
-        `,
+            RETURNING *
+          `,
       [subjectName, subjectCode, id, student.id],
     );
 
@@ -1261,16 +1348,19 @@ export const deleteSubject = async (req, res) => {
     await withTransaction(async (client) => {
       const result = await client.query(
         `
-              UPDATE personal_subjects
+                UPDATE
+                  personal_subjects
 
-              SET active = false,
+                SET
+                  active = false,
                   updated_at = NOW()
 
-              WHERE id = $1
-                AND student_id = $2
+                WHERE
+                  id = $1
+                  AND student_id = $2
 
-              RETURNING id
-            `,
+                RETURNING id
+              `,
         [id, student.id],
       );
 
@@ -1283,20 +1373,23 @@ export const deleteSubject = async (req, res) => {
       }
 
       /*
-       * Removing a subject also hides
-       * its timetable slots, but does not
-       * delete attendance history.
+       * Hide timetable slots but
+       * preserve attendance history.
        */
       await client.query(
         `
-            UPDATE personal_timetable
+              UPDATE
+                personal_timetable
 
-            SET active = false,
+              SET
+                active = false,
                 updated_at = NOW()
 
-            WHERE personal_subject_id = $1
-              AND student_id = $2
-          `,
+              WHERE
+                personal_subject_id =
+                  $1
+                AND student_id = $2
+            `,
         [id, student.id],
       );
     });
@@ -1314,7 +1407,7 @@ export const deleteSubject = async (req, res) => {
 };
 
 /* =========================================================
-   SAVE / UPDATE ATTENDANCE
+   SAVE ATTENDANCE
 ========================================================= */
 
 export const saveAttendance = async (req, res) => {
@@ -1344,10 +1437,6 @@ export const saveAttendance = async (req, res) => {
       });
     }
 
-    /*
-     * Make sure the timetable entry
-     * belongs to the logged-in student.
-     */
     const timetableResult = await query(
       `
             SELECT
@@ -1356,7 +1445,8 @@ export const saveAttendance = async (req, res) => {
 
             FROM personal_timetable
 
-            WHERE id = $1
+            WHERE
+              id = $1
               AND student_id = $2
               AND active = true
 
@@ -1372,12 +1462,10 @@ export const saveAttendance = async (req, res) => {
     }
 
     /*
-     * Prevent marking a class on the
-     * wrong weekday.
+     * Future dates ARE allowed.
      *
-     * Example:
-     * Monday class cannot be marked
-     * on Tuesday.
+     * They are stored now so the
+     * student can see a forecast.
      */
     if (timetableResult.rows[0].day_of_week !== dayNameFromDate(date)) {
       return res.status(400).json({
@@ -1385,20 +1473,10 @@ export const saveAttendance = async (req, res) => {
       });
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * We intentionally do NOT reject future
-     * dates here.
-     *
-     * Future attendance is stored as planned
-     * attendance and later becomes part of the
-     * actual attendance calculation when the
-     * date arrives.
-     */
     const result = await query(
       `
-            INSERT INTO personal_attendance
+            INSERT INTO
+              personal_attendance
               (
                 student_id,
                 timetable_id,
@@ -1407,7 +1485,12 @@ export const saveAttendance = async (req, res) => {
               )
 
             VALUES
-              ($1, $2, $3, $4)
+              (
+                $1,
+                $2,
+                $3,
+                $4
+              )
 
             ON CONFLICT
               (
@@ -1417,8 +1500,10 @@ export const saveAttendance = async (req, res) => {
               )
 
             DO UPDATE SET
-              status = EXCLUDED.status,
-              updated_at = NOW()
+              status =
+                EXCLUDED.status,
+              updated_at =
+                NOW()
 
             RETURNING
               id,
@@ -1469,9 +1554,11 @@ export const deleteAttendance = async (req, res) => {
 
     const result = await query(
       `
-            DELETE FROM personal_attendance
+            DELETE FROM
+              personal_attendance
 
-            WHERE id = $1
+            WHERE
+              id = $1
               AND student_id = $2
 
             RETURNING id
