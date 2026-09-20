@@ -19,8 +19,8 @@ const ChangePassword = () => {
   const { user, login } = useAuth(); 
 
   const validate = () => {
-    if (newPassword.length < 6) {
-      return 'New password must be at least 6 characters long.';
+    if (newPassword.length < 8) {
+      return 'New password must be at least 8 characters long.';
     }
     if (newPassword !== confirmPassword) {
       return 'New passwords do not match.';

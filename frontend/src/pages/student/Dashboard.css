@@ -612,3 +612,90 @@
     font-size: 11px;
   }
 }
+
+
+.student-personal-timetable-preview {
+  padding-bottom: 6px;
+}
+
+.student-timetable-preview-list {
+  display: grid;
+  padding: 0 18px 12px;
+}
+
+.student-timetable-preview-row {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(16, 21, 18, 0.07);
+}
+
+.student-timetable-preview-row:last-child {
+  border-bottom: 0;
+}
+
+.student-timetable-time {
+  color: #176b3a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.student-timetable-main strong,
+.student-timetable-main span {
+  display: block;
+}
+
+.student-timetable-main strong {
+  color: #26312a;
+  font-size: 11px;
+}
+
+.student-timetable-main span {
+  margin-top: 3px;
+  color: #8a948d;
+  font-size: 8px;
+}
+
+.student-timetable-status {
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: #f0f2ef;
+  color: #7d8880;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.student-timetable-status.present {
+  color: #10572e;
+  background: #edf7f0;
+}
+
+.student-timetable-status.absent {
+  color: #a84f40;
+  background: #fbefec;
+}
+
+.student-timetable-status.offday,
+.student-timetable-status.holiday,
+.student-timetable-status.cancelled {
+  color: #795d27;
+  background: #faf6e8;
+}
+
+@media (max-width: 620px) {
+  .student-timetable-preview-row {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 8px 0;
+  }
+
+  .student-timetable-main {
+    min-width: 0;
+  }
+
+  .student-timetable-time {
+    grid-column: 1 / -1;
+  }
+}

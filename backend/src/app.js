@@ -6,6 +6,7 @@ import teacherRoutes from './routes/teacherRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import personalTrackerRoutes from './routes/personalTrackerRoutes.js';
 
 const app = express();
 app.use(express.json());
@@ -15,6 +16,7 @@ app.use('/api/teacher', teacherRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/personal-tracker', personalTrackerRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

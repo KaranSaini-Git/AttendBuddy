@@ -9,30 +9,51 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const parseToken = (value) => {
+    const payload = value.split('.')[1];
+
+    if (!payload) {
+      throw new Error('Invalid token');
+    }
+
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const bytes = Uint8Array.from(atob(padded), (character) =>
+      character.charCodeAt(0),
+    );
+    const decoded = new TextDecoder().decode(bytes);
+
+    return JSON.parse(decoded);
+  };
+
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
+
     if (storedToken) {
       try {
-        const payload = JSON.parse(atob(storedToken.split('.')[1]));
-        if (payload.exp * 1000 > Date.now()) {
+        const payload = parseToken(storedToken);
+
+        if (payload.exp && payload.exp * 1000 > Date.now()) {
           setToken(storedToken);
           setUser(payload);
         } else {
           localStorage.removeItem('token');
         }
-      } catch (err) {
+      } catch {
         localStorage.removeItem('token');
       }
     }
+
     setIsLoading(false);
   }, []);
 
-  const login = (newToken) => {
+  const login = (newToken, providedUser = null) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
+
     try {
-      const payload = JSON.parse(atob(newToken.split('.')[1]));
-      setUser(payload);
+      const payload = parseToken(newToken);
+      setUser(providedUser || payload);
     } catch (err) {
       console.error('Invalid token payload', err);
     }

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   BookOpen,
+  CalendarClock,
   CalendarDays,
   ClipboardList,
   GraduationCap,
@@ -20,6 +21,7 @@ const items = [
   ["Attendance", "/student/attendance", ClipboardList],
   ["Calendar", "/student/calendar", CalendarDays],
   ["Subjects", "/student/subjects", BookOpen],
+  ["Personal Tracker", "/student/personal-tracker", CalendarClock],
 ];
 
 export default function StudentLayout() {

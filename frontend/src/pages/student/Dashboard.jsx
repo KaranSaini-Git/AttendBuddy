@@ -44,12 +44,18 @@ const formatDate = (value) =>
     day: "numeric",
   });
 
+const formatLocalDate = (date) => {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [personalToday, setPersonalToday] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -70,6 +76,27 @@ export default function Dashboard() {
       mounted = false;
     };
   }, [showToast]);
+
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPersonalToday = async () => {
+      try {
+        const response = await api.get("/personal-tracker", {
+          params: { date: formatLocalDate(new Date()) },
+        });
+        if (mounted) setPersonalToday(response.data);
+      } catch {
+        // The personal tracker is optional; the main dashboard should still load.
+      }
+    };
+
+    loadPersonalToday();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const computed = useMemo(() => {
     if (!data) return null;
@@ -412,6 +439,41 @@ export default function Dashboard() {
             )}
           </div>
         </article>
+      </section>
+
+      <section className="student-panel student-personal-timetable-preview">
+        <div className="student-panel-head">
+          <div>
+            <div className="student-section-label">Personal tracker</div>
+            <h2>Today's timetable</h2>
+          </div>
+          <button className="student-inline-link" onClick={() => navigate("/student/personal-tracker")}>
+            Open tracker <ChevronRight size={15} />
+          </button>
+        </div>
+
+        {!personalToday?.today?.length ? (
+          <div className="student-empty">
+            No personal classes are scheduled today. Add your timetable from the Personal Tracker.
+          </div>
+        ) : (
+          <div className="student-timetable-preview-list">
+            {personalToday.today.slice(0, 4).map((entry) => (
+              <div key={entry.id} className="student-timetable-preview-row">
+                <div className="student-timetable-time">
+                  {new Date(2000, 0, 1, Number(String(entry.start_time).slice(0, 2)), Number(String(entry.start_time).slice(3, 5))).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </div>
+                <div className="student-timetable-main">
+                  <strong>{entry.subject_name}</strong>
+                  <span>{entry.subject_code || "No code"}{entry.room ? ` · ${entry.room}` : ""}</span>
+                </div>
+                <span className={`student-timetable-status ${entry.status?.toLowerCase().replace("-", "") || "unmarked"}`}>
+                  {entry.status === "Unmarked" ? "Not marked" : entry.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="student-bottom-grid">

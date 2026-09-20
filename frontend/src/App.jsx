@@ -29,6 +29,7 @@ import StudentAttendance from './pages/student/AttendanceHistory';
 import StudentCalendar from './pages/student/Calendar';
 import StudentSubjects from './pages/student/Subjects';
 import StudentProfile from './pages/student/Profile';
+import PersonalTracker from './pages/student/PersonalTracker';
 
 function App() {
   return (
@@ -67,6 +68,7 @@ function App() {
                 <Route path="/student/attendance" element={<StudentAttendance />} />
                 <Route path="/student/calendar" element={<StudentCalendar />} />
                 <Route path="/student/subjects" element={<StudentSubjects />} />
+                <Route path="/student/personal-tracker" element={<PersonalTracker />} />
                 <Route path="/student/profile" element={<StudentProfile />} />
               </Route>
             </Route>
