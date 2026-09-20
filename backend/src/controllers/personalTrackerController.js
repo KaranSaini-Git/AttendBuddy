@@ -1,25 +1,25 @@
-import { query, withTransaction } from '../config/db.js';
+import { query, withTransaction } from "../config/db.js";
 
 const VALID_DAYS = new Set([
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday'
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
 ]);
 
 const VALID_STATUSES = new Set([
-  'Present',
-  'Absent',
-  'Off-day',
-  'Holiday',
-  'Cancelled'
+  "Present",
+  "Absent",
+  "Off-day",
+  "Holiday",
+  "Cancelled",
 ]);
 
 const normalizeText = (value, maxLength = 255) => {
-  if (value === undefined || value === null) return '';
+  if (value === undefined || value === null) return "";
   return String(value).trim().slice(0, maxLength);
 };
 
@@ -29,27 +29,31 @@ const normalizeSubjectCode = (value) => {
 };
 
 const normalizeDay = (value) => {
-  const raw = normalizeText(value, 20).toLowerCase().replace(/\.$/, '');
+  const raw = normalizeText(value, 20).toLowerCase().replace(/\.$/, "");
   if (!raw) return null;
 
   const aliases = {
-    mon: 'Monday',
-    tue: 'Tuesday',
-    tues: 'Tuesday',
-    wed: 'Wednesday',
-    thu: 'Thursday',
-    thur: 'Thursday',
-    thurs: 'Thursday',
-    fri: 'Friday',
-    sat: 'Saturday',
-    sun: 'Sunday',
+    mon: "Monday",
+    tue: "Tuesday",
+    tues: "Tuesday",
+    wed: "Wednesday",
+    thu: "Thursday",
+    thur: "Thursday",
+    thurs: "Thursday",
+    fri: "Friday",
+    sat: "Saturday",
+    sun: "Sunday",
   };
 
-  return (aliases[raw] || [...VALID_DAYS].find((day) => day.toLowerCase() === raw)) || null;
+  return (
+    aliases[raw] ||
+    [...VALID_DAYS].find((day) => day.toLowerCase() === raw) ||
+    null
+  );
 };
 
 const normalizeTime = (value) => {
-  const raw = normalizeText(value, 20).toUpperCase().replace(/\s+/g, ' ');
+  const raw = normalizeText(value, 20).toUpperCase().replace(/\s+/g, " ");
   if (!raw) return null;
 
   const twentyFourHour = raw.match(/^(\d{1,2}):(\d{2})$/);
@@ -58,7 +62,7 @@ const normalizeTime = (value) => {
     const minute = Number(twentyFourHour[2]);
 
     if (hour > 23 || minute > 59) return null;
-    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }
 
   const twelveHour = raw.match(/^(\d{1,2}):(\d{2}) ?(AM|PM)$/);
@@ -69,10 +73,10 @@ const normalizeTime = (value) => {
   const period = twelveHour[3];
 
   if (hour < 1 || hour > 12 || minute > 59) return null;
-  if (period === 'AM' && hour === 12) hour = 0;
-  if (period === 'PM' && hour !== 12) hour += 12;
+  if (period === "AM" && hour === 12) hour = 0;
+  if (period === "PM" && hour !== 12) hour += 12;
 
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 };
 
 const normalizeDate = (value) => {
@@ -92,17 +96,17 @@ const normalizeDate = (value) => {
 
 const getStudentId = async (userId) => {
   const result = await query(
-    'SELECT id, student_id, name FROM students WHERE user_id = $1 AND active = true LIMIT 1',
-    [userId]
+    "SELECT id, student_id, name FROM students WHERE user_id = $1 AND active = true LIMIT 1",
+    [userId],
   );
   return result.rows[0] || null;
 };
 
 const dayNameFromDate = (dateString) => {
   const date = new Date(`${dateString}T00:00:00Z`);
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    timeZone: 'UTC'
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "UTC",
   }).format(date);
 };
 
@@ -115,9 +119,10 @@ const attendanceMath = (present, absent) => {
     ? Math.max(0, Math.ceil(3 * total - 4 * present))
     : 0;
 
-  const safeToMiss = !isBelowTarget && total > 0
-    ? Math.max(0, Math.floor((4 * present - 3 * total) / 3))
-    : 0;
+  const safeToMiss =
+    !isBelowTarget && total > 0
+      ? Math.max(0, Math.floor((4 * present - 3 * total) / 3))
+      : 0;
 
   return {
     total,
@@ -125,40 +130,44 @@ const attendanceMath = (present, absent) => {
     absent,
     percentage,
     classes_needed: classesNeeded,
-    safe_to_miss: safeToMiss
+    safe_to_miss: safeToMiss,
   };
 };
 
 const validateTimetableRow = (row, rowNumber) => {
   const subjectName = normalizeText(
-    row.subject_name ?? row.subject ?? row['Subject Name'],
-    120
+    row.subject_name ?? row.subject ?? row["Subject Name"],
+    120,
   );
   const subjectCode = normalizeSubjectCode(
-    row.subject_code ?? row.code ?? row['Subject Code']
+    row.subject_code ?? row.code ?? row["Subject Code"],
   );
-  const day = normalizeDay(row.day ?? row.day_of_week ?? row['Day of Week']);
+  const day = normalizeDay(row.day ?? row.day_of_week ?? row["Day of Week"]);
   const startTime = normalizeTime(
-    row.start_time ?? row.start ?? row['Start Time']
+    row.start_time ?? row.start ?? row["Start Time"],
   );
-  const endTime = normalizeTime(
-    row.end_time ?? row.end ?? row['End Time']
+  const endTime = normalizeTime(row.end_time ?? row.end ?? row["End Time"]);
+  const room = normalizeText(
+    row.room ?? row.room_number ?? row["Room Number"],
+    50,
   );
-  const room = normalizeText(row.room ?? row.room_number ?? row['Room Number'], 50);
-  const notes = normalizeText(row.notes ?? row.details ?? row['Additional Details'], 255);
+  const notes = normalizeText(
+    row.notes ?? row.details ?? row["Additional Details"],
+    255,
+  );
 
   const errors = [];
 
-  if (!subjectName) errors.push('Subject name is required.');
-  if (!day) errors.push('Day must be Monday through Sunday.');
-  if (!startTime) errors.push('Start time must use HH:MM.');
-  if (!endTime) errors.push('End time must use HH:MM.');
+  if (!subjectName) errors.push("Subject name is required.");
+  if (!day) errors.push("Day must be Monday through Sunday.");
+  if (!startTime) errors.push("Start time must use HH:MM.");
+  if (!endTime) errors.push("End time must use HH:MM.");
   if (startTime && endTime && startTime >= endTime) {
-    errors.push('End time must be later than start time.');
+    errors.push("End time must be later than start time.");
   }
 
   if (errors.length) {
-    return { error: `Row ${rowNumber}: ${errors.join(' ')}` };
+    return { error: `Row ${rowNumber}: ${errors.join(" ")}` };
   }
 
   return {
@@ -168,21 +177,25 @@ const validateTimetableRow = (row, rowNumber) => {
     startTime,
     endTime,
     room: room || null,
-    notes: notes || null
+    notes: notes || null,
   };
 };
 
 export const getTracker = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const selectedDate = req.query.date === undefined ? today : normalizeDate(req.query.date);
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const selectedDate =
+      req.query.date === undefined ? today : normalizeDate(req.query.date);
 
     if (!selectedDate) {
-      return res.status(400).json({ error: 'Date must use YYYY-MM-DD format.' });
+      return res
+        .status(400)
+        .json({ error: "Date must use YYYY-MM-DD format." });
     }
     const selectedDay = dayNameFromDate(selectedDate);
 
@@ -202,11 +215,12 @@ export const getTracker = async (req, res) => {
        LEFT JOIN personal_attendance pa
          ON pa.timetable_id = pt.id
         AND pa.student_id = $1
+        AND pa.class_date <= CURRENT_DATE
        WHERE ps.student_id = $1
          AND ps.active = true
        GROUP BY ps.id, ps.subject_name, ps.subject_code, ps.active
        ORDER BY ps.subject_name ASC`,
-      [student.id]
+      [student.id],
     );
 
     const timetableResult = await query(
@@ -236,7 +250,7 @@ export const getTracker = async (req, res) => {
            WHEN 'Sunday' THEN 7
          END,
          pt.start_time`,
-      [student.id]
+      [student.id],
     );
 
     const dayResult = await query(
@@ -262,13 +276,13 @@ export const getTracker = async (req, res) => {
          AND pt.active = true
          AND ps.active = true
        ORDER BY pt.start_time`,
-      [student.id, selectedDate, selectedDay]
+      [student.id, selectedDate, selectedDay],
     );
 
     const historyResult = await query(
       `SELECT
          pa.id,
-         pa.class_date,
+         TO_CHAR(pa.class_date, 'YYYY-MM-DD') AS class_date,
          pa.status,
          pt.id AS timetable_id,
          ps.id AS subject_id,
@@ -283,14 +297,11 @@ export const getTracker = async (req, res) => {
        WHERE pa.student_id = $1
        ORDER BY pa.class_date DESC, pt.start_time DESC
        LIMIT 200`,
-      [student.id]
+      [student.id],
     );
 
     const subjects = subjectsResult.rows.map((row) => {
-      const stats = attendanceMath(
-        Number(row.present),
-        Number(row.absent)
-      );
+      const stats = attendanceMath(Number(row.present), Number(row.absent));
       return {
         ...row,
         total: stats.total,
@@ -298,7 +309,7 @@ export const getTracker = async (req, res) => {
         absent: stats.absent,
         percentage: stats.percentage,
         classes_needed: stats.classes_needed,
-        safe_to_miss: stats.safe_to_miss
+        safe_to_miss: stats.safe_to_miss,
       };
     });
 
@@ -308,7 +319,7 @@ export const getTracker = async (req, res) => {
         result.absent += subject.absent;
         return result;
       },
-      { present: 0, absent: 0 }
+      { present: 0, absent: 0 },
     );
 
     const overallStats = attendanceMath(overall.present, overall.absent);
@@ -317,7 +328,7 @@ export const getTracker = async (req, res) => {
       student: {
         id: student.id,
         student_id: student.student_id,
-        name: student.name
+        name: student.name,
       },
       selected_date: selectedDate,
       selected_day: selectedDay,
@@ -325,28 +336,37 @@ export const getTracker = async (req, res) => {
       subjects,
       timetable: timetableResult.rows,
       today: dayResult.rows,
-      history: historyResult.rows
+      history: historyResult.rows,
     });
   } catch (error) {
-    console.error('Personal tracker load error:', error);
-    res.status(500).json({ error: 'Failed to load personal attendance tracker.' });
+    console.error("Personal tracker load error:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to load personal attendance tracker." });
   }
 };
 
 export const importTimetable = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const rows = req.body?.rows;
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'A non-empty timetable rows array is required.' });
+      return res
+        .status(400)
+        .json({ error: "A non-empty timetable rows array is required." });
     }
     if (rows.length > 300) {
-      return res.status(400).json({ error: 'You can import up to 300 timetable rows at once.' });
+      return res
+        .status(400)
+        .json({ error: "You can import up to 300 timetable rows at once." });
     }
 
-    const validated = rows.map((row, index) => validateTimetableRow(row || {}, index + 1));
+    const validated = rows.map((row, index) =>
+      validateTimetableRow(row || {}, index + 1),
+    );
     const firstError = validated.find((item) => item.error);
     if (firstError) return res.status(400).json({ error: firstError.error });
 
@@ -368,7 +388,7 @@ export const importTimetable = async (req, res) => {
              AND COALESCE(LOWER(subject_code), '') = COALESCE(LOWER($3), '')
            LIMIT 1
            FOR UPDATE`,
-          [student.id, row.subjectName, row.subjectCode]
+          [student.id, row.subjectName, row.subjectCode],
         );
 
         let subjectId;
@@ -383,7 +403,7 @@ export const importTimetable = async (req, res) => {
                  subject_code = $2,
                  updated_at = NOW()
              WHERE id = $3 AND student_id = $4`,
-            [row.subjectName, row.subjectCode, subjectId, student.id]
+            [row.subjectName, row.subjectCode, subjectId, student.id],
           );
         } else {
           const subjectResult = await client.query(
@@ -391,7 +411,7 @@ export const importTimetable = async (req, res) => {
                (student_id, subject_name, subject_code, active)
              VALUES ($1, $2, $3, true)
              RETURNING id`,
-            [student.id, row.subjectName, row.subjectCode]
+            [student.id, row.subjectName, row.subjectCode],
           );
           subjectId = subjectResult.rows[0].id;
         }
@@ -405,7 +425,7 @@ export const importTimetable = async (req, res) => {
              AND start_time = $4
              AND end_time = $5
            LIMIT 1`,
-          [student.id, subjectId, row.day, row.startTime, row.endTime]
+          [student.id, subjectId, row.day, row.startTime, row.endTime],
         );
 
         let saved;
@@ -419,7 +439,7 @@ export const importTimetable = async (req, res) => {
                  updated_at = NOW()
              WHERE id = $3
              RETURNING id`,
-            [row.room, row.notes, existingSlot.rows[0].id]
+            [row.room, row.notes, existingSlot.rows[0].id],
           );
           saved = updatedSlot.rows[0];
           updated += 1;
@@ -436,8 +456,8 @@ export const importTimetable = async (req, res) => {
               row.startTime,
               row.endTime,
               row.room,
-              row.notes
-            ]
+              row.notes,
+            ],
           );
           saved = createdSlot.rows[0];
           created += 1;
@@ -452,7 +472,7 @@ export const importTimetable = async (req, res) => {
           start_time: row.startTime,
           end_time: row.endTime,
           room: row.room,
-          notes: row.notes
+          notes: row.notes,
         });
       }
 
@@ -460,22 +480,22 @@ export const importTimetable = async (req, res) => {
     });
 
     res.status(201).json({
-      message: 'Timetable imported successfully.',
+      message: "Timetable imported successfully.",
       created: result.created,
       updated: result.updated,
-      imported: result.imported
+      imported: result.imported,
     });
   } catch (error) {
-    console.error('Timetable import error:', error);
-    if (error.code === '23505') {
+    console.error("Timetable import error:", error);
+    if (error.code === "23505") {
       return res.status(409).json({
-        error: 'The timetable contains a duplicate subject or class slot.'
+        error: "The timetable contains a duplicate subject or class slot.",
       });
     }
 
     res.status(500).json({
-      error: 'Failed to import timetable.',
-      ...(process.env.NODE_ENV !== 'production' && { details: error.message })
+      error: "Failed to import timetable.",
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
@@ -483,35 +503,60 @@ export const importTimetable = async (req, res) => {
 export const updateTimetableEntry = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid timetable entry.' });
+    if (!Number.isInteger(id))
+      return res.status(400).json({ error: "Invalid timetable entry." });
 
     const existingResult = await query(
       `SELECT * FROM personal_timetable WHERE id = $1 AND student_id = $2 LIMIT 1`,
-      [id, student.id]
+      [id, student.id],
     );
-    if (!existingResult.rows.length) return res.status(404).json({ error: 'Timetable entry not found.' });
+    if (!existingResult.rows.length)
+      return res.status(404).json({ error: "Timetable entry not found." });
 
     const current = existingResult.rows[0];
-    const day = req.body.day === undefined ? current.day_of_week : normalizeDay(req.body.day);
-    const startTime = req.body.start_time === undefined ? String(current.start_time).slice(0, 5) : normalizeTime(req.body.start_time);
-    const endTime = req.body.end_time === undefined ? String(current.end_time).slice(0, 5) : normalizeTime(req.body.end_time);
-    const room = req.body.room === undefined ? current.room : normalizeText(req.body.room, 50) || null;
-    const notes = req.body.notes === undefined ? current.notes : normalizeText(req.body.notes, 255) || null;
-    const subjectId = req.body.subject_id === undefined ? current.personal_subject_id : Number(req.body.subject_id);
+    const day =
+      req.body.day === undefined
+        ? current.day_of_week
+        : normalizeDay(req.body.day);
+    const startTime =
+      req.body.start_time === undefined
+        ? String(current.start_time).slice(0, 5)
+        : normalizeTime(req.body.start_time);
+    const endTime =
+      req.body.end_time === undefined
+        ? String(current.end_time).slice(0, 5)
+        : normalizeTime(req.body.end_time);
+    const room =
+      req.body.room === undefined
+        ? current.room
+        : normalizeText(req.body.room, 50) || null;
+    const notes =
+      req.body.notes === undefined
+        ? current.notes
+        : normalizeText(req.body.notes, 255) || null;
+    const subjectId =
+      req.body.subject_id === undefined
+        ? current.personal_subject_id
+        : Number(req.body.subject_id);
 
     if (!day || !startTime || !endTime || startTime >= endTime) {
-      return res.status(400).json({ error: 'Please provide a valid day and time range.' });
+      return res
+        .status(400)
+        .json({ error: "Please provide a valid day and time range." });
     }
-    if (!Number.isInteger(subjectId)) return res.status(400).json({ error: 'Invalid subject.' });
+    if (!Number.isInteger(subjectId))
+      return res.status(400).json({ error: "Invalid subject." });
 
     const subjectResult = await query(
       `SELECT id FROM personal_subjects WHERE id = $1 AND student_id = $2 AND active = true LIMIT 1`,
-      [subjectId, student.id]
+      [subjectId, student.id],
     );
-    if (!subjectResult.rows.length) return res.status(400).json({ error: 'Subject not found.' });
+    if (!subjectResult.rows.length)
+      return res.status(400).json({ error: "Subject not found." });
 
     const identityChanged =
       Number(subjectId) !== Number(current.personal_subject_id) ||
@@ -521,13 +566,14 @@ export const updateTimetableEntry = async (req, res) => {
 
     if (identityChanged) {
       const attendanceResult = await query(
-        'SELECT 1 FROM personal_attendance WHERE timetable_id = $1 LIMIT 1',
-        [id]
+        "SELECT 1 FROM personal_attendance WHERE timetable_id = $1 LIMIT 1",
+        [id],
       );
 
       if (attendanceResult.rows.length) {
         return res.status(400).json({
-          error: 'This class already has attendance history. Only the room and notes can be changed.'
+          error:
+            "This class already has attendance history. Only the room and notes can be changed.",
         });
       }
     }
@@ -544,54 +590,62 @@ export const updateTimetableEntry = async (req, res) => {
        WHERE id = $7
          AND student_id = $8
        RETURNING *`,
-      [subjectId, day, startTime, endTime, room, notes, id, student.id]
+      [subjectId, day, startTime, endTime, room, notes, id, student.id],
     );
 
     res.json(updated.rows[0]);
   } catch (error) {
-    console.error('Timetable update error:', error);
-    if (error.code === '23505') {
-      return res.status(409).json({ error: 'Another class already uses that same subject, day and time.' });
+    console.error("Timetable update error:", error);
+    if (error.code === "23505") {
+      return res.status(409).json({
+        error: "Another class already uses that same subject, day and time.",
+      });
     }
-    res.status(500).json({ error: 'Failed to update timetable entry.' });
+    res.status(500).json({ error: "Failed to update timetable entry." });
   }
 };
 
 export const deleteTimetableEntry = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid timetable entry.' });
+    if (!Number.isInteger(id))
+      return res.status(400).json({ error: "Invalid timetable entry." });
 
     const result = await query(
       `UPDATE personal_timetable
        SET active = false, updated_at = NOW()
        WHERE id = $1 AND student_id = $2
        RETURNING id`,
-      [id, student.id]
+      [id, student.id],
     );
 
-    if (!result.rows.length) return res.status(404).json({ error: 'Timetable entry not found.' });
-    res.json({ message: 'Timetable entry removed.' });
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Timetable entry not found." });
+    res.json({ message: "Timetable entry removed." });
   } catch (error) {
-    console.error('Timetable delete error:', error);
-    res.status(500).json({ error: 'Failed to remove timetable entry.' });
+    console.error("Timetable delete error:", error);
+    res.status(500).json({ error: "Failed to remove timetable entry." });
   }
 };
 
 export const updateSubject = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const id = Number(req.params.id);
     const subjectName = normalizeText(req.body.subject_name, 120);
     const subjectCode = normalizeSubjectCode(req.body.subject_code);
 
     if (!Number.isInteger(id) || !subjectName) {
-      return res.status(400).json({ error: 'A valid subject ID and name are required.' });
+      return res
+        .status(400)
+        .json({ error: "A valid subject ID and name are required." });
     }
 
     const result = await query(
@@ -602,27 +656,32 @@ export const updateSubject = async (req, res) => {
            updated_at = NOW()
        WHERE id = $3 AND student_id = $4
        RETURNING *`,
-      [subjectName, subjectCode, id, student.id]
+      [subjectName, subjectCode, id, student.id],
     );
 
-    if (!result.rows.length) return res.status(404).json({ error: 'Subject not found.' });
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Subject not found." });
     res.json(result.rows[0]);
   } catch (error) {
-    console.error('Personal subject update error:', error);
-    if (error.code === '23505') {
-      return res.status(409).json({ error: 'A subject with the same name and code already exists.' });
+    console.error("Personal subject update error:", error);
+    if (error.code === "23505") {
+      return res.status(409).json({
+        error: "A subject with the same name and code already exists.",
+      });
     }
-    res.status(500).json({ error: 'Failed to update subject.' });
+    res.status(500).json({ error: "Failed to update subject." });
   }
 };
 
 export const deleteSubject = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid subject.' });
+    if (!Number.isInteger(id))
+      return res.status(400).json({ error: "Invalid subject." });
 
     await withTransaction(async (client) => {
       const result = await client.query(
@@ -630,11 +689,11 @@ export const deleteSubject = async (req, res) => {
          SET active = false, updated_at = NOW()
          WHERE id = $1 AND student_id = $2
          RETURNING id`,
-        [id, student.id]
+        [id, student.id],
       );
 
       if (!result.rows.length) {
-        const error = new Error('Subject not found.');
+        const error = new Error("Subject not found.");
         error.status = 404;
         throw error;
       }
@@ -643,35 +702,38 @@ export const deleteSubject = async (req, res) => {
         `UPDATE personal_timetable
          SET active = false, updated_at = NOW()
          WHERE personal_subject_id = $1 AND student_id = $2`,
-        [id, student.id]
+        [id, student.id],
       );
     });
 
-    res.json({ message: 'Subject removed from your timetable.' });
+    res.json({ message: "Subject removed from your timetable." });
   } catch (error) {
-    console.error('Personal subject delete error:', error);
-    res.status(error.status || 500).json({ error: error.message || 'Failed to remove subject.' });
+    console.error("Personal subject delete error:", error);
+    res
+      .status(error.status || 500)
+      .json({ error: error.message || "Failed to remove subject." });
   }
 };
 
 export const saveAttendance = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const timetableId = Number(req.body.timetable_id);
     const date = normalizeDate(req.body.date);
     const status = normalizeText(req.body.status, 12);
 
-    if (!Number.isInteger(timetableId) || !date || !VALID_STATUSES.has(status)) {
+    if (
+      !Number.isInteger(timetableId) ||
+      !date ||
+      !VALID_STATUSES.has(status)
+    ) {
       return res.status(400).json({
-        error: 'Timetable entry, date and a valid attendance status are required.'
+        error:
+          "Timetable entry, date and a valid attendance status are required.",
       });
-    }
-
-    const today = await query(`SELECT CURRENT_DATE::text AS today`);
-    if (date > today.rows[0].today) {
-      return res.status(400).json({ error: 'Attendance cannot be marked for a future date.' });
     }
 
     const timetableResult = await query(
@@ -679,15 +741,17 @@ export const saveAttendance = async (req, res) => {
        FROM personal_timetable
        WHERE id = $1 AND student_id = $2 AND active = true
        LIMIT 1`,
-      [timetableId, student.id]
+      [timetableId, student.id],
     );
 
     if (!timetableResult.rows.length) {
-      return res.status(404).json({ error: 'Timetable entry not found.' });
+      return res.status(404).json({ error: "Timetable entry not found." });
     }
 
     if (timetableResult.rows[0].day_of_week !== dayNameFromDate(date)) {
-      return res.status(400).json({ error: 'That class is not scheduled for this date.' });
+      return res
+        .status(400)
+        .json({ error: "That class is not scheduled for this date." });
     }
 
     const result = await query(
@@ -699,35 +763,38 @@ export const saveAttendance = async (req, res) => {
          status = EXCLUDED.status,
          updated_at = NOW()
        RETURNING *`,
-      [student.id, timetableId, date, status]
+      [student.id, timetableId, date, status],
     );
 
-    res.json({ message: 'Attendance updated.', attendance: result.rows[0] });
+    res.json({ message: "Attendance updated.", attendance: result.rows[0] });
   } catch (error) {
-    console.error('Personal attendance save error:', error);
-    res.status(500).json({ error: 'Failed to save personal attendance.' });
+    console.error("Personal attendance save error:", error);
+    res.status(500).json({ error: "Failed to save personal attendance." });
   }
 };
 
 export const deleteAttendance = async (req, res) => {
   try {
     const student = await getStudentId(req.user.id);
-    if (!student) return res.status(404).json({ error: 'Student profile not found.' });
+    if (!student)
+      return res.status(404).json({ error: "Student profile not found." });
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid attendance record.' });
+    if (!Number.isInteger(id))
+      return res.status(400).json({ error: "Invalid attendance record." });
 
     const result = await query(
       `DELETE FROM personal_attendance
        WHERE id = $1 AND student_id = $2
        RETURNING id`,
-      [id, student.id]
+      [id, student.id],
     );
 
-    if (!result.rows.length) return res.status(404).json({ error: 'Attendance record not found.' });
-    res.json({ message: 'Attendance entry cleared.' });
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Attendance record not found." });
+    res.json({ message: "Attendance entry cleared." });
   } catch (error) {
-    console.error('Personal attendance delete error:', error);
-    res.status(500).json({ error: 'Failed to clear attendance entry.' });
+    console.error("Personal attendance delete error:", error);
+    res.status(500).json({ error: "Failed to clear attendance entry." });
   }
 };
