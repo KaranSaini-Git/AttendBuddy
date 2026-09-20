@@ -34,7 +34,7 @@
 .personal-eyebrow,
 .personal-section-label {
   color: #849189;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -43,7 +43,7 @@
 .personal-tracker-header h1 {
   margin: 7px 0 6px;
   font-family: "Manrope", sans-serif;
-  font-size: clamp(28px, 3vw, 39px);
+  font-size: clamp(32px, 3vw, 40px);
   line-height: 1.05;
   font-weight: 800;
   letter-spacing: -0.05em;
@@ -53,8 +53,8 @@
   max-width: 700px;
   margin: 0;
   color: var(--pt-muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.65;
 }
 
 .personal-header-actions {
@@ -78,23 +78,23 @@
 }
 
 .personal-summary-main {
-  min-height: 175px;
-  padding: 20px;
+  min-height: 190px;
+  padding: 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
 .personal-summary-ring {
   position: relative;
-  width: 124px;
-  height: 124px;
+  width: 142px;
+  height: 142px;
   flex: 0 0 auto;
 }
 
 .personal-summary-ring svg {
-  width: 124px;
-  height: 124px;
+  width: 142px;
+  height: 142px;
   transform: rotate(-90deg);
 }
 
@@ -123,7 +123,7 @@
 
 .personal-summary-ring strong {
   font-family: "Manrope", sans-serif;
-  font-size: 25px;
+  font-size: 29px;
   font-weight: 800;
   letter-spacing: -0.04em;
 }
@@ -131,20 +131,20 @@
 .personal-summary-ring span {
   margin-top: 1px;
   color: var(--pt-soft);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .personal-summary-copy h2 {
   margin: 7px 0 5px;
   font-family: "Manrope", sans-serif;
-  font-size: 17px;
+  font-size: 21px;
   letter-spacing: -0.025em;
 }
 
 .personal-summary-copy p {
   margin: 0;
   color: var(--pt-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .personal-target-message {
@@ -159,8 +159,8 @@
   border-radius: 10px;
   background: var(--pt-green-soft);
   color: var(--pt-green-dark);
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .personal-target-message.warning {
@@ -170,8 +170,8 @@
 }
 
 .personal-summary-stat {
-  min-height: 175px;
-  padding: 18px;
+  min-height: 190px;
+  padding: 22px;
   display: flex;
   align-items: flex-start;
   gap: 11px;
@@ -209,7 +209,7 @@
 
 .personal-summary-stat span {
   color: var(--pt-soft);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -218,13 +218,13 @@
 .personal-summary-stat strong {
   margin-top: 5px;
   font-family: "Manrope", sans-serif;
-  font-size: 24px;
+  font-size: 28px;
 }
 
 .personal-summary-stat small {
   margin-top: 4px;
   color: var(--pt-muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .personal-panel {
@@ -240,14 +240,14 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 15px;
-  padding: 18px 20px 16px;
+  padding: 21px 22px 18px;
   border-bottom: 1px solid #edf0ed;
 }
 
 .personal-panel-head h2 {
   margin: 4px 0 0;
   font-family: "Manrope", sans-serif;
-  font-size: 17px;
+  font-size: 21px;
   letter-spacing: -0.025em;
 }
 
@@ -279,7 +279,7 @@
   background: #fff;
   color: #4f5c54;
   outline: none;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .future-note {
@@ -291,21 +291,21 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .daily-class-list {
-  padding: 12px 20px 20px;
+  padding: 14px 22px 22px;
   display: grid;
   gap: 8px;
 }
 
 .daily-class-card {
   display: grid;
-  grid-template-columns: 140px minmax(160px, 1fr) minmax(350px, 1.4fr);
+  grid-template-columns: 155px minmax(200px, 1fr) minmax(400px, 1.4fr);
   align-items: center;
-  gap: 16px;
-  padding: 13px 14px;
+  gap: 18px;
+  padding: 16px 17px;
   border: 1px solid #e9edea;
   border-radius: 13px;
   background: #fbfcfb;
@@ -316,7 +316,7 @@
   align-items: center;
   gap: 6px;
   color: var(--pt-green);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .daily-class-time span {
@@ -325,8 +325,8 @@
 
 .daily-class-main h3 {
   margin: 5px 0 4px;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .subject-code-pill {
@@ -335,7 +335,7 @@
   border-radius: 6px;
   background: #edf2ef;
   color: #5a695f;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.06em;
 }
@@ -345,7 +345,7 @@
   flex-wrap: wrap;
   gap: 10px;
   color: var(--pt-soft);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .daily-class-meta span {
@@ -361,11 +361,11 @@
 
 .attendance-status {
   width: fit-content;
-  padding: 5px 7px;
+  padding: 6px 9px;
   border-radius: 999px;
   background: #f0f2ef;
   color: #77827a;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -394,12 +394,12 @@
 
 .status-button,
 .status-reset {
-  padding: 7px 8px;
+  padding: 8px 10px;
   border: 1px solid #e0e5e1;
   border-radius: 8px;
   background: #fff;
   color: #68736c;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -447,20 +447,20 @@
 
 .personal-empty-day strong {
   color: #5e6b63;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .personal-empty-day p {
   margin: 0;
   max-width: 420px;
   color: #8b958e;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .personal-empty-inline {
   padding: 22px 20px;
   color: #87928b;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .personal-count-chip {
@@ -468,7 +468,7 @@
   border-radius: 999px;
   background: #f1f4f1;
   color: #708078;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
 }
 
@@ -479,7 +479,7 @@
 }
 
 .weekly-column {
-  min-width: 145px;
+  min-width: 160px;
   border-right: 1px solid #edf0ed;
 }
 
@@ -488,8 +488,8 @@
 }
 
 .weekly-column-head {
-  min-height: 53px;
-  padding: 10px 12px;
+  min-height: 58px;
+  padding: 12px 14px;
   border-bottom: 1px solid #edf0ed;
   background: #fbfcfb;
   display: flex;
@@ -499,7 +499,7 @@
 
 .weekly-column-head span {
   color: #9aa49e;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -507,18 +507,18 @@
 
 .weekly-column-head strong {
   color: var(--pt-green);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .weekly-column-body {
-  min-height: 160px;
-  padding: 9px;
+  min-height: 190px;
+  padding: 11px;
   background: #fdfefd;
 }
 
 .weekly-class {
   margin-bottom: 8px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid #e6ebe7;
   border-radius: 11px;
   background: #fff;
@@ -537,7 +537,7 @@
 
 .weekly-class-top > span {
   color: var(--pt-green);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -547,8 +547,8 @@
 }
 
 .weekly-class-top button {
-  width: 23px;
-  height: 23px;
+  width: 27px;
+  height: 27px;
   border-radius: 7px;
   background: #f7f9f7;
   color: #929b95;
@@ -559,15 +559,15 @@
 .weekly-class > strong {
   display: block;
   margin-top: 8px;
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .weekly-class > small {
   display: block;
   margin-top: 3px;
   color: #87928b;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .weekly-class > span {
@@ -576,7 +576,7 @@
   gap: 3px;
   margin-top: 6px;
   color: #919b94;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .weekly-empty {
@@ -584,18 +584,18 @@
   display: grid;
   place-items: center;
   color: #b3bbb6;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .personal-subject-grid {
-  padding: 16px 20px 20px;
+  padding: 18px 22px 22px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .personal-subject-card {
-  padding: 14px;
+  padding: 17px;
   border: 1px solid #e8ede9;
   border-radius: 13px;
   background: #fbfcfb;
@@ -614,20 +614,20 @@
   border-radius: 6px;
   background: #edf3ef;
   color: #627268;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
 }
 
 .personal-subject-top h3 {
   margin: 8px 0 0;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .personal-subject-top > strong {
   color: var(--pt-green);
   font-family: "Manrope", sans-serif;
-  font-size: 17px;
+  font-size: 21px;
 }
 
 .personal-subject-top > strong.low {
@@ -659,15 +659,15 @@
   gap: 5px;
   margin-top: 8px;
   color: #87928b;
-  font-size: 7px;
+  font-size: 9px;
 }
 
 .personal-subject-target {
   min-height: 31px;
   margin-top: 9px;
   color: #68756d;
-  font-size: 8px;
-  line-height: 1.4;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .personal-subject-actions {
@@ -680,11 +680,11 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 7px;
+  padding: 6px 9px;
   border-radius: 7px;
   background: #f3f6f3;
   color: #717d75;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -700,7 +700,7 @@
 .history-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .history-table th,
@@ -714,7 +714,7 @@
 .history-table th {
   color: #929c95;
   background: #fbfcfb;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -731,7 +731,7 @@
 
 .history-table td strong {
   color: #425048;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .history-table td small {
@@ -742,11 +742,11 @@
 
 .history-status {
   display: inline-flex;
-  padding: 5px 7px;
+  padding: 6px 9px;
   border-radius: 999px;
   background: #f0f2ef;
   color: #78837b;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
 }
 
@@ -849,8 +849,8 @@
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  font-size: 10px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .import-preview {
@@ -1036,5 +1036,233 @@
   .tracker-form-actions > * {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* =========================================================
+   READABILITY PASS — MATCH EXISTING ATTENDBUDDY PAGES
+   The original tracker used 7–10px body text in several places,
+   which made the page feel smaller than Dashboard and Teacher pages.
+========================================================= */
+
+.personal-tracker {
+  font-size: 14px;
+}
+
+.personal-tracker button,
+.personal-tracker input,
+.personal-tracker select {
+  font-size: 12px;
+}
+
+.personal-tracker-header h1 {
+  font-size: clamp(32px, 3.2vw, 42px);
+}
+
+.personal-tracker-header p {
+  font-size: 14px;
+}
+
+.personal-section-label,
+.personal-eyebrow {
+  font-size: 11px;
+}
+
+.personal-summary-main,
+.personal-summary-stat {
+  min-height: 190px;
+}
+
+.personal-summary-ring,
+.personal-summary-ring svg {
+  width: 142px;
+  height: 142px;
+}
+
+.personal-summary-ring strong {
+  font-size: 29px;
+}
+
+.personal-summary-copy h2 {
+  font-size: 19px;
+}
+
+.personal-summary-copy p {
+  font-size: 12px;
+}
+
+.personal-target-message {
+  font-size: 11px;
+  padding: 9px 11px;
+}
+
+.personal-summary-stat span {
+  font-size: 10px;
+}
+
+.personal-summary-stat strong {
+  font-size: 28px;
+}
+
+.personal-summary-stat small {
+  font-size: 11px;
+}
+
+.personal-panel-head h2 {
+  font-size: 19px;
+}
+
+.date-picker-row input,
+.history-filter-wrap select {
+  font-size: 12px;
+}
+
+.future-note {
+  font-size: 11px;
+}
+
+.daily-class-card {
+  padding: 16px 17px;
+}
+
+.daily-class-time {
+  font-size: 12px;
+}
+
+.daily-class-main h3 {
+  font-size: 14px;
+}
+
+.daily-class-meta {
+  font-size: 11px;
+}
+
+.attendance-status,
+.status-button,
+.status-reset {
+  font-size: 10px;
+}
+
+.status-button,
+.status-reset {
+  padding: 8px 10px;
+}
+
+.personal-empty-day strong {
+  font-size: 14px;
+}
+
+.personal-empty-day p,
+.personal-empty-inline {
+  font-size: 11px;
+}
+
+.weekly-column {
+  min-width: 160px;
+}
+
+.weekly-column-head span {
+  font-size: 10px;
+}
+
+.weekly-column-head strong {
+  font-size: 11px;
+}
+
+.weekly-class-top > span {
+  font-size: 10px;
+}
+
+.weekly-class > strong {
+  font-size: 12px;
+}
+
+.weekly-class > small,
+.weekly-class > span {
+  font-size: 10px;
+}
+
+.personal-subject-top h3 {
+  font-size: 13px;
+}
+
+.personal-subject-top > strong {
+  font-size: 21px;
+}
+
+.personal-subject-stats {
+  font-size: 9px;
+}
+
+.personal-subject-target {
+  font-size: 10px;
+}
+
+.personal-subject-actions button {
+  font-size: 10px;
+  padding: 7px 9px;
+}
+
+.history-table {
+  font-size: 12px;
+}
+
+.history-table th {
+  font-size: 9px;
+}
+
+.history-table td strong {
+  font-size: 12px;
+}
+
+.history-table td small {
+  font-size: 10px;
+}
+
+.history-status {
+  font-size: 10px;
+}
+
+.import-intro strong,
+.tracker-form-note strong {
+  font-size: 12px;
+}
+
+.import-intro p,
+.tracker-form-note p,
+.upload-dropzone {
+  font-size: 11px;
+}
+
+.import-preview table {
+  font-size: 11px;
+}
+
+.import-preview th {
+  font-size: 9px;
+}
+
+@media (max-width: 620px) {
+  .personal-tracker-header h1 {
+    font-size: 34px;
+  }
+
+  .personal-summary-main,
+  .personal-summary-stat {
+    min-height: 0;
+  }
+
+  .personal-summary-ring,
+  .personal-summary-ring svg {
+    width: 142px;
+    height: 142px;
+  }
+
+  .daily-class-main h3 {
+    font-size: 14px;
+  }
+
+  .personal-subject-top > strong {
+    font-size: 20px;
   }
 }
