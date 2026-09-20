@@ -1040,229 +1040,717 @@
 }
 
 /* =========================================================
-   READABILITY PASS — MATCH EXISTING ATTENDBUDDY PAGES
-   The original tracker used 7–10px body text in several places,
-   which made the page feel smaller than Dashboard and Teacher pages.
+   FINAL UI SCALE PASS
+   Reworked from the uploaded PersonalTracker.css.
+
+   Goal:
+   - Match the visual scale of the main AttendBuddy pages.
+   - Increase readability without changing the design language.
+   - Give cards, timetable rows, subject cards and history
+     enough breathing room.
 ========================================================= */
 
 .personal-tracker {
-  font-size: 14px;
+  font-size: 15px;
 }
 
-.personal-tracker button,
-.personal-tracker input,
-.personal-tracker select {
+/* =========================================================
+   PAGE HEADER
+========================================================= */
+
+.personal-tracker-header {
+  gap: 28px;
+  padding: 8px 2px 10px;
+}
+
+.personal-eyebrow,
+.personal-section-label {
   font-size: 12px;
+  letter-spacing: 0.14em;
 }
 
 .personal-tracker-header h1 {
-  font-size: clamp(32px, 3.2vw, 42px);
+  margin: 10px 0 8px;
+  font-size: clamp(38px, 3.2vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
 }
 
 .personal-tracker-header p {
-  font-size: 14px;
+  max-width: 760px;
+  font-size: 15px;
+  line-height: 1.65;
 }
 
-.personal-section-label,
-.personal-eyebrow {
-  font-size: 11px;
+.personal-header-actions {
+  gap: 10px;
 }
 
-.personal-summary-main,
-.personal-summary-stat {
-  min-height: 190px;
+/* =========================================================
+   SUMMARY CARDS
+========================================================= */
+
+.personal-summary-grid {
+  gap: 16px;
+}
+
+.personal-summary-card {
+  border-radius: 20px;
+}
+
+.personal-summary-main {
+  min-height: 220px;
+  padding: 30px;
+  gap: 30px;
 }
 
 .personal-summary-ring,
 .personal-summary-ring svg {
-  width: 142px;
-  height: 142px;
+  width: 158px;
+  height: 158px;
 }
 
 .personal-summary-ring strong {
-  font-size: 29px;
+  font-size: 34px;
 }
 
-.personal-summary-copy h2 {
-  font-size: 19px;
-}
-
-.personal-summary-copy p {
+.personal-summary-ring span {
   font-size: 12px;
 }
 
+.personal-summary-copy h2 {
+  margin: 8px 0 7px;
+  font-size: 26px;
+}
+
+.personal-summary-copy p {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
 .personal-target-message {
-  font-size: 11px;
-  padding: 9px 11px;
+  margin-top: 16px;
+  padding: 10px 13px;
+  gap: 8px;
+  border-radius: 11px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.personal-summary-stat {
+  min-height: 220px;
+  padding: 28px;
+  gap: 14px;
+}
+
+.personal-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
 }
 
 .personal-summary-stat span {
-  font-size: 10px;
-}
-
-.personal-summary-stat strong {
-  font-size: 28px;
-}
-
-.personal-summary-stat small {
   font-size: 11px;
 }
 
+.personal-summary-stat strong {
+  margin-top: 7px;
+  font-size: 34px;
+}
+
+.personal-summary-stat small {
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   PANELS
+========================================================= */
+
+.personal-panel {
+  border-radius: 20px;
+}
+
+.personal-panel-head {
+  padding: 25px 28px 22px;
+  gap: 20px;
+}
+
 .personal-panel-head h2 {
-  font-size: 19px;
+  margin-top: 7px;
+  font-size: 25px;
+  line-height: 1.2;
+}
+
+/* =========================================================
+   DATE / FILTER CONTROLS
+========================================================= */
+
+.date-picker-row,
+.history-filter-wrap {
+  gap: 7px;
+}
+
+.date-picker-row button,
+.history-filter-wrap button {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
 }
 
 .date-picker-row input,
 .history-filter-wrap select {
-  font-size: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
 }
 
+/* =========================================================
+   DAILY ATTENDANCE
+========================================================= */
+
 .future-note {
-  font-size: 11px;
+  margin: 18px 28px 0;
+  padding: 11px 13px;
+  border-radius: 11px;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.daily-class-list {
+  padding: 20px 28px 30px;
+  gap: 12px;
 }
 
 .daily-class-card {
-  padding: 16px 17px;
+  grid-template-columns:
+    180px
+    minmax(250px, 1fr)
+    minmax(480px, 1.4fr);
+
+  gap: 24px;
+
+  padding: 20px 22px;
+
+  border-radius: 15px;
 }
 
 .daily-class-time {
-  font-size: 12px;
+  gap: 8px;
+  font-size: 14px;
 }
 
 .daily-class-main h3 {
-  font-size: 14px;
+  margin: 7px 0 5px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.subject-code-pill {
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 10px;
 }
 
 .daily-class-meta {
+  gap: 12px;
+  font-size: 12px;
+}
+
+.daily-class-actions {
+  gap: 10px;
+}
+
+.attendance-status {
+  padding: 7px 10px;
   font-size: 11px;
 }
 
-.attendance-status,
-.status-button,
-.status-reset {
-  font-size: 10px;
+.status-buttons {
+  gap: 8px;
 }
 
 .status-button,
 .status-reset {
-  padding: 8px 10px;
+  padding: 10px 13px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+/* =========================================================
+   EMPTY STATES
+========================================================= */
+
+.personal-empty-day {
+  min-height: 230px;
+  padding: 30px;
+  gap: 9px;
 }
 
 .personal-empty-day strong {
-  font-size: 14px;
+  font-size: 17px;
 }
 
-.personal-empty-day p,
+.personal-empty-day p {
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .personal-empty-inline {
+  padding: 28px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   WEEKLY TIMETABLE
+========================================================= */
+
+.personal-count-chip {
+  padding: 7px 10px;
   font-size: 11px;
+}
+
+.weekly-grid {
+  min-width: 0;
 }
 
 .weekly-column {
-  min-width: 160px;
+  min-width: 185px;
+}
+
+.weekly-column-head {
+  min-height: 66px;
+  padding: 15px 17px;
 }
 
 .weekly-column-head span {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .weekly-column-head strong {
-  font-size: 11px;
+  font-size: 13px;
+}
+
+.weekly-column-body {
+  min-height: 230px;
+  padding: 14px;
+}
+
+.weekly-class {
+  margin-bottom: 11px;
+  padding: 15px;
+  border-radius: 12px;
 }
 
 .weekly-class-top > span {
   font-size: 10px;
 }
 
+.weekly-class-top button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
 .weekly-class > strong {
-  font-size: 12px;
+  margin-top: 9px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .weekly-class > small,
 .weekly-class > span {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.weekly-class > span {
+  margin-top: 7px;
+}
+
+/* =========================================================
+   SUBJECT CARDS
+========================================================= */
+
+.personal-subject-grid {
+  padding: 22px 28px 30px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.personal-subject-card {
+  min-height: 220px;
+  padding: 21px;
+  border-radius: 16px;
+}
+
+.personal-subject-code {
+  padding: 5px 8px;
+  border-radius: 7px;
   font-size: 10px;
 }
 
 .personal-subject-top h3 {
-  font-size: 13px;
+  margin: 11px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 .personal-subject-top > strong {
-  font-size: 21px;
+  font-size: 29px;
+}
+
+.personal-subject-bar {
+  height: 8px;
+  margin-top: 16px;
 }
 
 .personal-subject-stats {
-  font-size: 9px;
+  margin-top: 10px;
+  font-size: 11px;
 }
 
 .personal-subject-target {
-  font-size: 10px;
+  min-height: 40px;
+  margin-top: 11px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.personal-subject-actions {
+  gap: 7px;
+  margin-top: 14px;
 }
 
 .personal-subject-actions button {
-  font-size: 10px;
-  padding: 7px 9px;
+  gap: 5px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+/* =========================================================
+   HISTORY
+========================================================= */
+
+.history-table-wrap {
+  overflow-x: auto;
 }
 
 .history-table {
-  font-size: 12px;
+  font-size: 13px;
+}
+
+.history-table th,
+.history-table td {
+  padding: 16px 28px;
 }
 
 .history-table th {
-  font-size: 9px;
+  font-size: 10px;
+}
+
+.history-table td {
+  font-size: 13px;
 }
 
 .history-table td strong {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .history-table td small {
+  margin-top: 4px;
   font-size: 10px;
 }
 
 .history-status {
+  padding: 7px 11px;
   font-size: 10px;
+}
+
+/* =========================================================
+   IMPORT / FORMS
+========================================================= */
+
+.import-modal,
+.tracker-form {
+  gap: 20px;
+}
+
+.import-intro,
+.tracker-form-note {
+  gap: 12px;
+  padding: 15px 16px;
+  border-radius: 13px;
+}
+
+.import-icon,
+.tracker-form-note > svg {
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
 }
 
 .import-intro strong,
 .tracker-form-note strong {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .import-intro p,
-.tracker-form-note p,
-.upload-dropzone {
+.tracker-form-note p {
+  margin-top: 4px;
   font-size: 11px;
+  line-height: 1.6;
+}
+
+.import-tools {
+  gap: 9px;
+}
+
+.upload-dropzone {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 11px;
+  gap: 9px;
+  font-size: 11px;
+}
+
+.import-error {
+  padding: 12px 14px;
+  border-radius: 11px;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.import-preview-head {
+  padding: 13px 15px;
+}
+
+.import-preview-head strong {
+  font-size: 12px;
+}
+
+.import-preview-head span {
+  font-size: 10px;
 }
 
 .import-preview table {
   font-size: 11px;
 }
 
+.import-preview th,
+.import-preview td {
+  padding: 11px 13px;
+}
+
 .import-preview th {
   font-size: 9px;
 }
 
+.import-actions,
+.tracker-form-actions {
+  gap: 8px;
+}
+
+.tracker-form-grid {
+  gap: 14px;
+}
+
+/* =========================================================
+   DESKTOP -> TABLET
+========================================================= */
+
+@media (max-width: 1200px) {
+  .personal-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .personal-summary-main {
+    grid-column: 1 / -1;
+  }
+
+  .personal-subject-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .daily-class-card {
+    grid-template-columns:
+      165px
+      minmax(220px, 1fr)
+      minmax(360px, 1.2fr);
+  }
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 900px) {
+  .personal-tracker-header {
+    align-items: flex-start;
+  }
+
+  .daily-class-card {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .daily-class-actions {
+    grid-column: 1 / -1;
+  }
+
+  .personal-summary-main {
+    min-height: 210px;
+  }
+
+  .weekly-grid {
+    grid-template-columns: repeat(7, minmax(180px, 1fr));
+    overflow-x: auto;
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
 @media (max-width: 620px) {
+  .personal-tracker {
+    font-size: 14px;
+  }
+
+  .personal-tracker-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
   .personal-tracker-header h1 {
     font-size: 34px;
   }
 
-  .personal-summary-main,
-  .personal-summary-stat {
-    min-height: 0;
-  }
-
-  .personal-summary-ring,
-  .personal-summary-ring svg {
-    width: 142px;
-    height: 142px;
-  }
-
-  .daily-class-main h3 {
+  .personal-tracker-header p {
     font-size: 14px;
   }
 
-  .personal-subject-top > strong {
-    font-size: 20px;
+  .personal-header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .personal-header-actions > * {
+    width: 100%;
+  }
+
+  .personal-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .personal-summary-main {
+    grid-column: auto;
+    min-height: 0;
+    padding: 24px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .personal-summary-ring {
+    align-self: center;
+  }
+
+  .personal-summary-copy h2,
+  .personal-panel-head h2 {
+    font-size: 22px;
+  }
+
+  .personal-summary-stat {
+    min-height: 0;
+    padding: 22px;
+  }
+
+  .personal-summary-stat strong {
+    font-size: 30px;
+  }
+
+  .personal-panel-head {
+    padding: 21px 19px 18px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .date-picker-row,
+  .history-filter-wrap {
+    width: 100%;
+  }
+
+  .date-picker-row input,
+  .history-filter-wrap select {
+    flex: 1;
+  }
+
+  .future-note {
+    margin-left: 19px;
+    margin-right: 19px;
+  }
+
+  .daily-class-list {
+    padding: 17px 19px 24px;
+  }
+
+  .daily-class-card {
+    padding: 18px;
+  }
+
+  .daily-class-main h3 {
+    font-size: 15px;
+  }
+
+  .status-buttons {
+    width: 100%;
+  }
+
+  .status-button,
+  .status-reset {
+    flex: 1;
+  }
+
+  .personal-subject-grid {
+    grid-template-columns: 1fr;
+    padding-left: 19px;
+    padding-right: 19px;
+  }
+
+  .personal-subject-card {
+    min-height: 0;
+  }
+
+  .history-table th,
+  .history-table td {
+    padding-left: 19px;
+    padding-right: 19px;
+  }
+
+  .tracker-form-grid,
+  .tracker-form-grid + .tracker-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .import-tools,
+  .import-actions,
+  .tracker-form-actions {
+    flex-direction: column;
+  }
+
+  .import-tools > *,
+  .import-actions > *,
+  .tracker-form-actions > * {
+    width: 100%;
+    justify-content: center;
   }
 }
